@@ -60,6 +60,54 @@ public class SurveysController : ControllerBase
         return Ok(surveys.Select(ToResponse));
     }
 
+    // Map/report feed for the SPA: a GeoJSON FeatureCollection of the caller's surveys,
+    // filterable by project and viewport bbox. Lightweight per marker (photoCount only);
+    // the SPA fetches full detail + photo URLs via GET {id} on marker click.
+    [HttpGet("geojson")]
+    public async Task<ActionResult<GeoJsonFeatureCollection>> GeoJson(
+        [FromQuery] Guid? projectId,
+        [FromQuery] double? minLat, [FromQuery] double? minLng,
+        [FromQuery] double? maxLat, [FromQuery] double? maxLng,
+        [FromQuery] int limit = 5000,
+        CancellationToken ct = default)
+    {
+        var userId = User.GetUserId();
+        limit = Math.Clamp(limit, 1, 10000);
+
+        var query = _db.Surveys.AsNoTracking().Where(s => s.UserId == userId);
+
+        if (projectId is not null)
+            query = query.Where(s => s.ProjectId == projectId);
+
+        if (minLat is not null && minLng is not null && maxLat is not null && maxLng is not null)
+        {
+            var bbox = _geometryFactory.ToGeometry(
+                new Envelope(minLng.Value, maxLng.Value, minLat.Value, maxLat.Value));
+            query = query.Where(s => s.Location.Intersects(bbox));
+        }
+
+        // Materialize before reading Location.X/.Y so the geography isn't dereferenced in SQL.
+        var rows = await query
+            .OrderByDescending(s => s.CapturedAtUtc)
+            .Take(limit)
+            .Select(s => new GeoRow(
+                s.Id, s.ProjectId, s.Status, s.CapturedAtUtc, s.SyncedAtUtc,
+                s.AccuracyMeters, s.Location, s.Photos.Count, s.Details))
+            .ToListAsync(ct);
+
+        var features = rows.Select(r => GeoJsonFeature.Point(
+            r.Location.X, r.Location.Y,
+            new SurveyFeatureProperties(
+                r.Id, r.ProjectId, r.Status, r.CapturedAtUtc, r.SyncedAtUtc,
+                r.AccuracyMeters, r.PhotoCount, r.Details))).ToList();
+
+        return Ok(GeoJsonFeatureCollection.Of(features));
+    }
+
+    private sealed record GeoRow(
+        Guid Id, Guid ProjectId, string Status, DateTime CapturedAtUtc, DateTime SyncedAtUtc,
+        double? AccuracyMeters, Point Location, int PhotoCount, string? Details);
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SurveyResponse>> Get(Guid id, CancellationToken ct)
     {
