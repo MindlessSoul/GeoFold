@@ -1,0 +1,10 @@
+# Normalize line endings: store LF in the repo, check out native on each OS.
+* text=auto
+
+# Explicitly treat source as text
+*.cs        text diff=csharp
+*.csproj    text
+*.slnx      text
+*.json      text
+*.md        text
+*.http      text

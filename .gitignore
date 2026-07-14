@@ -1,0 +1,39 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+
+# .NET / MSBuild
+project.lock.json
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.binlog
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+*.coverage
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & local-only config (keep committed appsettings.json as a template only)
+*.env
+.env
+appsettings.*.Local.json
+secrets.json
+
+# Claude local (personal) settings — keep shared .claude/settings.json if added later
+.claude/settings.local.json
