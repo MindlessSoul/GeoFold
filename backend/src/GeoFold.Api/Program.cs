@@ -1,12 +1,12 @@
+using GeoFold.Api.Authentication;
 using GeoFold.Api.Authorization;
 using GeoFold.Api.Data;
 using GeoFold.Api.Export;
 using GeoFold.Api.Quota;
 using GeoFold.Api.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
 
@@ -31,8 +31,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<GeometryFactory>(
     NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326));
 
-builder.Services.Configure<SupabaseOptions>(
-    builder.Configuration.GetSection(SupabaseOptions.SectionName));
+// Meant to fail fast on missing/placeholder Supabase config instead of booting an app whose every
+// authenticated request dies later. NOTE: the guard does not fire yet — see SupabaseConfigurationGuard.
+builder.Services.AddSingleton<IValidateOptions<SupabaseOptions>, SupabaseOptionsValidator>();
+builder.Services.AddOptions<SupabaseOptions>()
+    .Bind(builder.Configuration.GetSection(SupabaseOptions.SectionName));
+builder.Services.AddHostedService<SupabaseConfigurationGuard>();
+
 builder.Services.AddHttpClient<IStorageService, SupabaseStorageService>();
 
 builder.Services.AddMemoryCache();
@@ -41,27 +46,7 @@ builder.Services.AddScoped<IAuthorizationHandler, ActiveSubscriptionHandler>();
 builder.Services.AddScoped<IQuotaService, QuotaService>();
 builder.Services.AddSingleton<ExportService>();
 
-var supabaseUrl = builder.Configuration["Supabase:Url"]!;
-var supabaseJwtSecret = builder.Configuration["Supabase:JwtSecret"];
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = $"{supabaseUrl}/auth/v1";
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = $"{supabaseUrl}/auth/v1",
-            ValidateAudience = true,
-            ValidAudience = "authenticated",
-            ValidateLifetime = true,
-            // Supabase's default JWT secret is symmetric (HS256); switch to Authority-based
-            // JWKS validation instead if the project is configured for asymmetric (RS256) keys.
-            IssuerSigningKey = supabaseJwtSecret is null
-                ? null
-                : new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(supabaseJwtSecret))
-        };
-    });
+builder.Services.AddSupabaseJwtAuthentication();
 
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("PremiumOnly", p => p.Requirements.Add(new ActiveSubscriptionRequirement()));

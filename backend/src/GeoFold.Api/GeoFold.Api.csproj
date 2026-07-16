@@ -4,6 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Real Supabase keys belong here, not in the git-tracked appsettings.json. -->
+    <UserSecretsId>geofold-api-8f3c1d7a-4b62-4f9e-9a1c-2d5e6f7a8b90</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

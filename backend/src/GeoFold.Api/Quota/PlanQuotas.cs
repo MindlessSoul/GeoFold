@@ -7,6 +7,9 @@ namespace GeoFold.Api.Quota;
 /// </summary>
 public sealed record QuotaLimits(int? MaxProjects, int? MaxSurveysPerMonth, int? StorageQuotaMb);
 
+/// <summary>Current consumption for a user, to be read alongside <see cref="QuotaLimits"/>.</summary>
+public sealed record QuotaUsage(int Projects, int SurveysThisMonth, long StorageBytes);
+
 /// <summary>
 /// Result of a single quota check. <see cref="Allowed"/> gates the action; <see cref="Message"/>
 /// is a human-readable reason surfaced to the client when denied.

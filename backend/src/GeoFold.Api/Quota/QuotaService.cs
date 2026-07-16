@@ -11,6 +11,7 @@ namespace GeoFold.Api.Quota;
 public interface IQuotaService
 {
     Task<QuotaLimits> GetLimitsAsync(Guid userId, CancellationToken ct = default);
+    Task<QuotaUsage> GetUsageAsync(Guid userId, CancellationToken ct = default);
     Task<QuotaCheckResult> CheckProjectCreationAsync(Guid userId, CancellationToken ct = default);
     Task<QuotaCheckResult> CheckSurveyCreationAsync(Guid userId, CancellationToken ct = default);
     Task<QuotaCheckResult> CheckPhotoUploadAsync(Guid userId, long newBytes, CancellationToken ct = default);
@@ -42,14 +43,18 @@ public class QuotaService : IQuotaService
             sub.StorageQuotaMb ?? baseLimits.StorageQuotaMb);
     }
 
+    public async Task<QuotaUsage> GetUsageAsync(Guid userId, CancellationToken ct = default) =>
+        new(await CountProjectsAsync(userId, ct),
+            await CountSurveysThisMonthAsync(userId, ct),
+            await SumStorageBytesAsync(userId, ct));
+
     public async Task<QuotaCheckResult> CheckProjectCreationAsync(Guid userId, CancellationToken ct = default)
     {
         var limits = await GetLimitsAsync(userId, ct);
         if (limits.MaxProjects is not { } max)
             return QuotaCheckResult.Ok;
 
-        var count = await _db.Projects
-            .CountAsync(p => p.UserId == userId && p.ArchivedAtUtc == null, ct);
+        var count = await CountProjectsAsync(userId, ct);
 
         return count >= max
             ? QuotaCheckResult.Deny($"Project limit reached ({count}/{max}). Upgrade your plan to create more.")
@@ -62,11 +67,7 @@ public class QuotaService : IQuotaService
         if (limits.MaxSurveysPerMonth is not { } max)
             return QuotaCheckResult.Ok;
 
-        var now = DateTime.UtcNow;
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        var count = await _db.Surveys
-            .CountAsync(s => s.UserId == userId && s.SyncedAtUtc >= monthStart, ct);
+        var count = await CountSurveysThisMonthAsync(userId, ct);
 
         return count >= max
             ? QuotaCheckResult.Deny($"Monthly survey limit reached ({count}/{max}). Upgrade your plan to sync more this month.")
@@ -80,14 +81,32 @@ public class QuotaService : IQuotaService
             return QuotaCheckResult.Ok;
 
         var quotaBytes = (long)quotaMb * 1024 * 1024;
-
-        var usedBytes = await _db.SurveyPhotos
-            .Where(p => p.Survey.UserId == userId)
-            .SumAsync(p => (long?)p.SizeBytes, ct) ?? 0L;
+        var usedBytes = await SumStorageBytesAsync(userId, ct);
 
         return usedBytes + newBytes > quotaBytes
             ? QuotaCheckResult.Deny($"Storage quota exceeded ({FormatMb(usedBytes)}/{quotaMb} MB used). Upgrade your plan for more storage.")
             : QuotaCheckResult.Ok;
+    }
+
+    private Task<int> CountProjectsAsync(Guid userId, CancellationToken ct) =>
+        _db.Projects.CountAsync(p => p.UserId == userId && p.ArchivedAtUtc == null, ct);
+
+    // Metered on server-sync time: a client could otherwise backdate CapturedAtUtc to dodge the cap.
+    private Task<int> CountSurveysThisMonthAsync(Guid userId, CancellationToken ct)
+    {
+        var monthStart = MonthStartUtc();
+        return _db.Surveys.CountAsync(s => s.UserId == userId && s.SyncedAtUtc >= monthStart, ct);
+    }
+
+    private async Task<long> SumStorageBytesAsync(Guid userId, CancellationToken ct) =>
+        await _db.SurveyPhotos
+            .Where(p => p.Survey.UserId == userId)
+            .SumAsync(p => (long?)p.SizeBytes, ct) ?? 0L;
+
+    private static DateTime MonthStartUtc()
+    {
+        var now = DateTime.UtcNow;
+        return new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
     }
 
     private static string FormatMb(long bytes) => (bytes / (1024.0 * 1024.0)).ToString("0.#");
