@@ -56,16 +56,30 @@ public class PlanQuotasTests
         Assert.Null(limits.MaxProjects); // null == unlimited
     }
 
-    // FLAGGED BEHAVIOUR, not an endorsement: a canceled subscription drops to the free *plan*,
-    // but a per-user override on the row still wins, so a lapsed user keeps the elevated ceiling.
-    // For a freemium product that is likely a revenue leak. Pinned here so the decision is explicit
-    // and any change to it is deliberate.
+    // GeoFold has exactly two tiers (Free, Premium) and no partner/bespoke tier, so an override
+    // is only ever an attribute of a live paid subscription. Once it lapses the user is a free
+    // user, override or not — otherwise a canceled account keeps a paid ceiling.
     [Fact]
-    public void CanceledSubscriptionCurrentlyKeepsItsPerUserOverride()
+    public void CanceledSubscriptionLosesPerUserOverride()
     {
         var limits = PlanQuotas.Resolve(Sub(SubscriptionPlan.Premium, SubscriptionStatus.Canceled, maxProjects: 50));
 
-        Assert.Equal(50, limits.MaxProjects);              // override survives cancellation
-        Assert.Equal(PlanQuotas.Free.StorageQuotaMb, limits.StorageQuotaMb); // but un-overridden dims do drop
+        Assert.Equal(PlanQuotas.Free, limits);
+    }
+
+    [Fact]
+    public void TrialingSubscriptionKeepsPerUserOverride()
+    {
+        var limits = PlanQuotas.Resolve(Sub(SubscriptionPlan.Premium, SubscriptionStatus.Trialing, maxProjects: 50));
+
+        Assert.Equal(50, limits.MaxProjects);
+    }
+
+    [Fact]
+    public void PastDueSubscriptionLosesPerUserOverride()
+    {
+        var limits = PlanQuotas.Resolve(Sub(SubscriptionPlan.Premium, SubscriptionStatus.PastDue, maxProjects: 50));
+
+        Assert.Equal(PlanQuotas.Free, limits);
     }
 }

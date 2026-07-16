@@ -34,17 +34,18 @@ public static class PlanQuotas
         plan == SubscriptionPlan.Premium ? Premium : Free;
 
     /// <summary>
-    /// The effective ceiling for a subscription: the plan default, with any non-null per-user
-    /// override on the subscription row taking precedence. A missing or inactive subscription
-    /// falls back to the free plan. Pure, so it is testable without a database.
+    /// The effective ceiling for a subscription. Both the paid plan and any per-user override
+    /// require a subscription in good standing (<see cref="Subscription.IsActive"/>: active or
+    /// trialing). Anything else — no subscription, past due, canceled — falls all the way back to
+    /// the free plan, so a lapsed user cannot keep an elevated ceiling via a leftover override.
+    /// Pure, so it is testable without a database.
     /// </summary>
     public static QuotaLimits Resolve(Subscription? subscription)
     {
-        var effectivePlan = subscription is { IsActive: true } ? subscription.Plan : SubscriptionPlan.Free;
-        var baseLimits = For(effectivePlan);
+        if (subscription is not { IsActive: true })
+            return Free;
 
-        if (subscription is null)
-            return baseLimits;
+        var baseLimits = For(subscription.Plan);
 
         return new QuotaLimits(
             subscription.MaxProjects ?? baseLimits.MaxProjects,
