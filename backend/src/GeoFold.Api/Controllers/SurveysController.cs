@@ -1,9 +1,8 @@
 using GeoFold.Api.Authorization;
 using GeoFold.Api.Data;
 using GeoFold.Api.DTOs;
-using GeoFold.Api.Models;
 using GeoFold.Api.Quota;
-using GeoFold.Api.Validation;
+using GeoFold.Api.Sync;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,13 +17,13 @@ public class SurveysController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly GeometryFactory _geometryFactory;
-    private readonly IQuotaService _quota;
+    private readonly ISurveySyncService _sync;
 
-    public SurveysController(AppDbContext db, GeometryFactory geometryFactory, IQuotaService quota)
+    public SurveysController(AppDbContext db, GeometryFactory geometryFactory, ISurveySyncService sync)
     {
         _db = db;
         _geometryFactory = geometryFactory;
-        _quota = quota;
+        _sync = sync;
     }
 
     [HttpGet]
@@ -57,7 +56,7 @@ public class SurveysController : ControllerBase
             .Include(s => s.Photos)
             .ToListAsync(ct);
 
-        return Ok(surveys.Select(ToResponse));
+        return Ok(surveys.Select(SurveyMapper.ToResponse));
     }
 
     // Map/report feed for the SPA: a GeoJSON FeatureCollection of the caller's surveys,
@@ -117,7 +116,7 @@ public class SurveysController : ControllerBase
             .Include(s => s.Photos)
             .FirstOrDefaultAsync(s => s.Id == id && s.UserId == userId, ct);
 
-        return survey is null ? NotFound() : Ok(ToResponse(survey));
+        return survey is null ? NotFound() : Ok(SurveyMapper.ToResponse(survey));
     }
 
     /// <summary>
@@ -128,71 +127,17 @@ public class SurveysController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<SurveyResponse>> Upsert(UpsertSurveyRequest request, CancellationToken ct)
     {
-        var userId = User.GetUserId();
+        var result = await _sync.UpsertAsync(User.GetUserId(), request, ct);
 
-        // Needed by both paths: the target project must be the caller's, and form_data is validated
-        // against its schema on update as well as create.
-        var project = await _db.Projects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == request.ProjectId && p.UserId == userId, ct);
-        if (project is null)
-            return BadRequest("Project not found or not owned by the current user.");
-
-        var schema = FormSchemaValidator.ParseSchema(project.FormSchema, out _);
-        var formErrors = FormSchemaValidator.Validate(request.DetailsJson, schema);
-        if (formErrors.Count > 0)
-            return BadRequest(new { error = "invalid_form_data", errors = formErrors });
-
-        var location = _geometryFactory.CreatePoint(new Coordinate(request.Longitude, request.Latitude));
-
-        var existing = await _db.Surveys
-            .Include(s => s.Photos)
-            .FirstOrDefaultAsync(s => s.Id == request.Id, ct);
-
-        if (existing is not null)
+        return result.Status switch
         {
-            if (existing.UserId != userId)
-                return Forbid();
-
-            // Last write wins. Status is owned by the review workflow, not the sync payload, so it
-            // is left alone; the monthly quota is not charged again for an existing survey.
-            existing.ProjectId = request.ProjectId;
-            existing.Location = location;
-            existing.AccuracyMeters = request.AccuracyMeters;
-            existing.CapturedAtUtc = request.CapturedAtUtc;
-            existing.Details = request.DetailsJson;
-            existing.SyncedAtUtc = DateTime.UtcNow;
-
-            await _db.SaveChangesAsync(ct);
-            return Ok(ToResponse(existing));
-        }
-
-        var quota = await _quota.CheckSurveyCreationAsync(userId, ct);
-        if (!quota.Allowed)
-            return QuotaResults.QuotaExceeded(quota.Message);
-
-        var survey = new Survey
-        {
-            Id = request.Id,
-            ProjectId = request.ProjectId,
-            UserId = userId,
-            Location = location,
-            AccuracyMeters = request.AccuracyMeters,
-            CapturedAtUtc = request.CapturedAtUtc,
-            SyncedAtUtc = DateTime.UtcNow,
-            Details = request.DetailsJson,
-            Status = Models.SurveyStatus.Submitted
+            SyncOutcome.Created => CreatedAtAction(nameof(Get), new { id = result.Id },
+                                                   SurveyMapper.ToResponse(result.Survey!)),
+            SyncOutcome.Updated => Ok(SurveyMapper.ToResponse(result.Survey!)),
+            SyncOutcome.QuotaExceeded => QuotaResults.QuotaExceeded(result.Errors.FirstOrDefault()),
+            SyncOutcome.Forbidden => Forbid(),
+            _ => BadRequest(new { error = "invalid_survey", errors = result.Errors })
         };
-
-        _db.Surveys.Add(survey);
-        await _db.SaveChangesAsync(ct);
-
-        return CreatedAtAction(nameof(Get), new { id = survey.Id }, ToResponse(survey));
     }
 
-    private static SurveyResponse ToResponse(Survey s) => new(
-        s.Id, s.ProjectId, s.Location.Y, s.Location.X, s.AccuracyMeters,
-        s.CapturedAtUtc, s.SyncedAtUtc, s.Details, s.Status,
-        s.Photos.Select(p => new SurveyPhotoResponse(
-            p.Id, p.UploadStatus, p.Location.Y, p.Location.X, p.CapturedAtUtc)).ToList());
 }

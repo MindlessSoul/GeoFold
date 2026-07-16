@@ -4,6 +4,7 @@ using GeoFold.Api.Data;
 using GeoFold.Api.Export;
 using GeoFold.Api.Quota;
 using GeoFold.Api.Services;
+using GeoFold.Api.Sync;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -44,6 +45,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<ISubscriptionCache, SubscriptionCache>();
 builder.Services.AddScoped<IAuthorizationHandler, ActiveSubscriptionHandler>();
 builder.Services.AddScoped<IQuotaService, QuotaService>();
+builder.Services.AddScoped<ISurveySyncService, SurveySyncService>();
 builder.Services.AddSingleton<ExportService>();
 
 builder.Services.AddSupabaseJwtAuthentication();
