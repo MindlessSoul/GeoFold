@@ -32,4 +32,23 @@ public static class PlanQuotas
 
     public static QuotaLimits For(string plan) =>
         plan == SubscriptionPlan.Premium ? Premium : Free;
+
+    /// <summary>
+    /// The effective ceiling for a subscription: the plan default, with any non-null per-user
+    /// override on the subscription row taking precedence. A missing or inactive subscription
+    /// falls back to the free plan. Pure, so it is testable without a database.
+    /// </summary>
+    public static QuotaLimits Resolve(Subscription? subscription)
+    {
+        var effectivePlan = subscription is { IsActive: true } ? subscription.Plan : SubscriptionPlan.Free;
+        var baseLimits = For(effectivePlan);
+
+        if (subscription is null)
+            return baseLimits;
+
+        return new QuotaLimits(
+            subscription.MaxProjects ?? baseLimits.MaxProjects,
+            subscription.MaxSurveysPerMonth ?? baseLimits.MaxSurveysPerMonth,
+            subscription.StorageQuotaMb ?? baseLimits.StorageQuotaMb);
+    }
 }

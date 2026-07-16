@@ -29,18 +29,7 @@ public class QuotaService : IQuotaService
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.UserId == userId, ct);
 
-        // An inactive/past-due subscription drops the user back to free-tier limits.
-        var effectivePlan = sub is { IsActive: true } ? sub.Plan : SubscriptionPlan.Free;
-        var baseLimits = PlanQuotas.For(effectivePlan);
-
-        if (sub is null)
-            return baseLimits;
-
-        // Per-user overrides on the subscription row take precedence over the plan default.
-        return new QuotaLimits(
-            sub.MaxProjects ?? baseLimits.MaxProjects,
-            sub.MaxSurveysPerMonth ?? baseLimits.MaxSurveysPerMonth,
-            sub.StorageQuotaMb ?? baseLimits.StorageQuotaMb);
+        return PlanQuotas.Resolve(sub);
     }
 
     public async Task<QuotaUsage> GetUsageAsync(Guid userId, CancellationToken ct = default) =>
