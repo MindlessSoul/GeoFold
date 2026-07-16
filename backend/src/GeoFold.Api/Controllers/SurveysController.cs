@@ -120,11 +120,30 @@ public class SurveysController : ControllerBase
         return survey is null ? NotFound() : Ok(ToResponse(survey));
     }
 
-    // Idempotent on Id: retried offline-sync uploads never create duplicates.
+    /// <summary>
+    /// Keyed on the client-generated Id: a retried offline sync never creates a duplicate, and a
+    /// survey edited offline and re-pushed is applied as an update rather than being silently
+    /// ignored. Returns 201 for a new survey, 200 for an update.
+    /// </summary>
     [HttpPost]
     public async Task<ActionResult<SurveyResponse>> Upsert(UpsertSurveyRequest request, CancellationToken ct)
     {
         var userId = User.GetUserId();
+
+        // Needed by both paths: the target project must be the caller's, and form_data is validated
+        // against its schema on update as well as create.
+        var project = await _db.Projects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == request.ProjectId && p.UserId == userId, ct);
+        if (project is null)
+            return BadRequest("Project not found or not owned by the current user.");
+
+        var schema = FormSchemaValidator.ParseSchema(project.FormSchema, out _);
+        var formErrors = FormSchemaValidator.Validate(request.DetailsJson, schema);
+        if (formErrors.Count > 0)
+            return BadRequest(new { error = "invalid_form_data", errors = formErrors });
+
+        var location = _geometryFactory.CreatePoint(new Coordinate(request.Longitude, request.Latitude));
 
         var existing = await _db.Surveys
             .Include(s => s.Photos)
@@ -132,24 +151,22 @@ public class SurveysController : ControllerBase
 
         if (existing is not null)
         {
-            return existing.UserId == userId
-                ? Ok(ToResponse(existing))
-                : Forbid();
+            if (existing.UserId != userId)
+                return Forbid();
+
+            // Last write wins. Status is owned by the review workflow, not the sync payload, so it
+            // is left alone; the monthly quota is not charged again for an existing survey.
+            existing.ProjectId = request.ProjectId;
+            existing.Location = location;
+            existing.AccuracyMeters = request.AccuracyMeters;
+            existing.CapturedAtUtc = request.CapturedAtUtc;
+            existing.Details = request.DetailsJson;
+            existing.SyncedAtUtc = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync(ct);
+            return Ok(ToResponse(existing));
         }
 
-        var project = await _db.Projects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == request.ProjectId && p.UserId == userId, ct);
-        if (project is null)
-            return BadRequest("Project not found or not owned by the current user.");
-
-        // Validate the submitted form_data against the project's form_schema.
-        var schema = FormSchemaValidator.ParseSchema(project.FormSchema, out _);
-        var formErrors = FormSchemaValidator.Validate(request.DetailsJson, schema);
-        if (formErrors.Count > 0)
-            return BadRequest(new { error = "invalid_form_data", errors = formErrors });
-
-        // Monthly survey quota — only new surveys reach here; retried syncs short-circuit above.
         var quota = await _quota.CheckSurveyCreationAsync(userId, ct);
         if (!quota.Allowed)
             return QuotaResults.QuotaExceeded(quota.Message);
@@ -159,7 +176,7 @@ public class SurveysController : ControllerBase
             Id = request.Id,
             ProjectId = request.ProjectId,
             UserId = userId,
-            Location = _geometryFactory.CreatePoint(new Coordinate(request.Longitude, request.Latitude)),
+            Location = location,
             AccuracyMeters = request.AccuracyMeters,
             CapturedAtUtc = request.CapturedAtUtc,
             SyncedAtUtc = DateTime.UtcNow,
