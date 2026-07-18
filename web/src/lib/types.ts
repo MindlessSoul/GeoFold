@@ -51,3 +51,24 @@ export interface SurveyFeatureCollection {
     properties: SurveyProperties
   }>
 }
+
+export interface SurveyPhoto {
+  id: string
+  uploadStatus: string
+  latitude: number
+  longitude: number
+  capturedAtUtc: string
+}
+
+export interface SurveyDetail {
+  id: string
+  projectId: string
+  latitude: number
+  longitude: number
+  accuracyMeters: number | null
+  capturedAtUtc: string
+  syncedAtUtc: string
+  detailsJson: string | null
+  status: string
+  photos: SurveyPhoto[]
+}
