@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import type { SurveyDetail, SurveyFeatureCollection, SurveyProperties } from '../lib/types'
 
 const DEFAULT_CENTER: [number, number] = [-2.5, 118] // Indonesia-ish until data recentres it.
@@ -101,12 +101,32 @@ function SurveyMarker({ feature }: { feature: SurveyFeatureCollection['features'
 export function MapPage() {
   const [fc, setFc] = useState<SurveyFeatureCollection | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [premiumRequired, setPremiumRequired] = useState(false)
 
   useEffect(() => {
     api<SurveyFeatureCollection>('/api/v1/surveys/geojson')
       .then(setFc)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load surveys.'))
+      .catch((e) => {
+        // The map feed is premium-only; a free user gets 403 here.
+        if (e instanceof ApiError && e.status === 403) setPremiumRequired(true)
+        else setError(e instanceof Error ? e.message : 'Failed to load surveys.')
+      })
   }, [])
+
+  if (premiumRequired) {
+    return (
+      <div>
+        <h1>Survey map</h1>
+        <div className="card">
+          <strong>Premium feature</strong>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Viewing surveys on a map is available on the Premium plan. Your surveys are still being
+            collected — upgrade to see them plotted here.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const features = fc?.features ?? []
   const first = features[0]

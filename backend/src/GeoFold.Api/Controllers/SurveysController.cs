@@ -62,6 +62,8 @@ public class SurveysController : ControllerBase
     // Map/report feed for the SPA: a GeoJSON FeatureCollection of the caller's surveys,
     // filterable by project and viewport bbox. Lightweight per marker (photoCount only);
     // the SPA fetches full detail + photo URLs via GET {id} on marker click.
+    // Map reporting is a premium feature: free users can collect surveys but not view them on a map.
+    [Authorize(Policy = "PremiumOnly")]
     [HttpGet("geojson")]
     public async Task<ActionResult<GeoJsonFeatureCollection>> GeoJson(
         [FromQuery] Guid? projectId,
