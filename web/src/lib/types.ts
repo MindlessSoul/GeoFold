@@ -72,3 +72,9 @@ export interface SurveyDetail {
   status: string
   photos: SurveyPhoto[]
 }
+
+export interface InitiatePhotoResponse {
+  photoId: string
+  uploadUrl: string
+  storagePath: string
+}

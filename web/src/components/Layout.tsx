@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { FolderKanban, Map, CreditCard, LogOut, MapPin } from 'lucide-react'
+import { Camera, FolderKanban, Map, CreditCard, LogOut, MapPin } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 export function Layout() {
@@ -21,6 +21,9 @@ export function Layout() {
         </div>
 
         <nav className="side-nav">
+          <NavLink to="/capture">
+            <Camera /> Capture
+          </NavLink>
           <NavLink to="/projects">
             <FolderKanban /> Projects
           </NavLink>

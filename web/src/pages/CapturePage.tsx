@@ -1,0 +1,267 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import { Camera, MapPin, RefreshCw, Check } from 'lucide-react'
+import { api, ApiError } from '../lib/api'
+import { buildDetails, getPosition, watermarkPhoto } from '../lib/capture'
+import type { FormField, InitiatePhotoResponse, ProjectResponse } from '../lib/types'
+
+function parseSchema(json: string): FormField[] {
+  try {
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function CapturePage() {
+  const [projects, setProjects] = useState<ProjectResponse[] | null>(null)
+  const [projectId, setProjectId] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [pos, setPos] = useState<GeolocationPosition | null>(null)
+  const [gpsBusy, setGpsBusy] = useState(false)
+  const [gpsError, setGpsError] = useState<string | null>(null)
+  const [values, setValues] = useState<Record<string, string | boolean>>({})
+  const [step, setStep] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    api<ProjectResponse[]>('/api/v1/projects')
+      .then((p) => {
+        setProjects(p)
+        if (p.length === 1) setProjectId(p[0].id)
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load projects.'))
+  }, [])
+
+  const fields = useMemo(() => {
+    const project = projects?.find((p) => p.id === projectId)
+    return project ? parseSchema(project.formSchema) : []
+  }, [projects, projectId])
+
+  const captureGps = async () => {
+    setGpsBusy(true)
+    setGpsError(null)
+    try {
+      setPos(await getPosition())
+    } catch (e) {
+      setGpsError(e instanceof Error ? e.message : 'Could not get location.')
+    } finally {
+      setGpsBusy(false)
+    }
+  }
+
+  const onPickPhoto = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null
+    setFile(f)
+    setPreviewUrl(f ? URL.createObjectURL(f) : null)
+    // Grab location as soon as a photo is taken, so it reflects where the shot happened.
+    if (f && !pos) captureGps()
+  }
+
+  const canSubmit = projectId && file && pos && !step
+
+  const submit = async () => {
+    if (!file || !pos) return
+    setError(null)
+    try {
+      const capturedAtUtc = new Date().toISOString()
+      const lat = pos.coords.latitude
+      const lng = pos.coords.longitude
+      const surveyId = crypto.randomUUID()
+
+      setStep('Saving survey…')
+      await api('/api/v1/surveys', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: surveyId,
+          projectId,
+          latitude: lat,
+          longitude: lng,
+          accuracyMeters: pos.coords.accuracy,
+          capturedAtUtc,
+          detailsJson: JSON.stringify(buildDetails(fields, values)),
+        }),
+      })
+
+      setStep('Stamping photo…')
+      const stamped = await watermarkPhoto(file, [
+        `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        new Date(capturedAtUtc).toLocaleString(),
+      ])
+
+      setStep('Uploading photo…')
+      const photoId = crypto.randomUUID()
+      const init = await api<InitiatePhotoResponse>(`/api/v1/surveys/${surveyId}/photos/initiate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          id: photoId,
+          fileName: 'photo.jpg',
+          contentType: 'image/jpeg',
+          sizeBytes: stamped.size,
+          latitude: lat,
+          longitude: lng,
+          capturedAtUtc,
+        }),
+      })
+
+      const put = await fetch(init.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: stamped,
+      })
+      if (!put.ok) throw new Error(`Photo upload failed (${put.status}).`)
+
+      setStep('Finishing…')
+      await api(`/api/v1/surveys/${surveyId}/photos/${photoId}/complete`, { method: 'POST' })
+
+      setDone(true)
+      setStep(null)
+    } catch (e) {
+      setStep(null)
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Something went wrong.')
+    }
+  }
+
+  const reset = () => {
+    setFile(null)
+    setPreviewUrl(null)
+    setValues({})
+    setDone(false)
+    setError(null)
+    setPos(null)
+  }
+
+  if (done) {
+    return (
+      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+        <div className="card" style={{ textAlign: 'center', padding: 28 }}>
+          <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'var(--accent-soft)',
+            color: 'var(--accent-ink)', display: 'grid', placeItems: 'center', margin: '0 auto 12px' }}>
+            <Check size={24} />
+          </div>
+          <div className="card-title" style={{ justifyContent: 'center' }}>Survey saved</div>
+          <p className="muted">Photo, location and description were uploaded.</p>
+          <button onClick={reset} style={{ marginTop: 8 }}>
+            <Camera size={16} style={{ verticalAlign: -3, marginRight: 6 }} /> Capture another
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div className="page-head">
+        <h1>Capture</h1>
+        <p>Take a photo at a location, add a description, and save it.</p>
+      </div>
+
+      {error && <p className="error">{error}</p>}
+
+      <div className="card">
+        <label>Project</label>
+        <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+          <option value="">Select a project…</option>
+          {projects?.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+
+        <label style={{ marginTop: 16 }}>Photo</label>
+        <label
+          htmlFor="photo"
+          style={{
+            display: 'block', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius)',
+            padding: previewUrl ? 8 : 28, textAlign: 'center', cursor: 'pointer', color: 'var(--text-2)',
+            background: 'var(--surface-2)', margin: 0,
+          }}
+        >
+          {previewUrl ? (
+            <img src={previewUrl} alt="Preview" style={{ width: '100%', borderRadius: 8, display: 'block' }} />
+          ) : (
+            <>
+              <Camera size={26} style={{ opacity: 0.6 }} />
+              <div style={{ marginTop: 6, fontSize: 14 }}>Tap to take a photo</div>
+            </>
+          )}
+        </label>
+        <input
+          id="photo"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={onPickPhoto}
+          style={{ display: 'none' }}
+        />
+
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <MapPin size={18} style={{ color: 'var(--accent)' }} />
+          <div style={{ flex: 1, fontSize: 14 }}>
+            {pos ? (
+              <span>
+                {pos.coords.latitude.toFixed(6)}, {pos.coords.longitude.toFixed(6)}{' '}
+                <span className="hint">±{Math.round(pos.coords.accuracy)}m</span>
+              </span>
+            ) : gpsError ? (
+              <span className="error" style={{ background: 'none', border: 'none', padding: 0 }}>{gpsError}</span>
+            ) : (
+              <span className="hint">Location not captured yet</span>
+            )}
+          </div>
+          <button type="button" className="ghost" onClick={captureGps} disabled={gpsBusy} style={{ padding: '7px 12px' }}>
+            <RefreshCw size={15} style={{ verticalAlign: -3, marginRight: 5 }} />
+            {gpsBusy ? 'Locating…' : pos ? 'Update' : 'Get GPS'}
+          </button>
+        </div>
+      </div>
+
+      {fields.length > 0 && (
+        <div className="card">
+          <div className="card-title">Description</div>
+          {fields.map((f) => (
+            <div key={f.key}>
+              <label>
+                {f.label ?? f.key}
+                {f.required && <span style={{ color: 'var(--danger)' }}> *</span>}
+              </label>
+              {f.type.toLowerCase() === 'boolean' || f.type.toLowerCase() === 'bool' ? (
+                <input
+                  type="checkbox"
+                  checked={Boolean(values[f.key])}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.checked }))}
+                  style={{ width: 'auto' }}
+                />
+              ) : (
+                <input
+                  type={
+                    f.type.toLowerCase() === 'number' || f.type.toLowerCase() === 'integer'
+                      ? 'number'
+                      : f.type.toLowerCase() === 'date'
+                        ? 'date'
+                        : 'text'
+                  }
+                  value={String(values[f.key] ?? '')}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button onClick={submit} disabled={!canSubmit} style={{ width: '100%', padding: 13 }}>
+        {step ? (
+          <>
+            <span className="spinner" style={{ marginRight: 8 }} /> {step}
+          </>
+        ) : (
+          'Save survey'
+        )}
+      </button>
+      {!pos && file && <p className="hint" style={{ textAlign: 'center', marginTop: 8 }}>Waiting for location…</p>}
+    </div>
+  )
+}
