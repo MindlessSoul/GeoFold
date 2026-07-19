@@ -7,15 +7,15 @@ function Meter({ label, used, limit, unit = '' }: { label: string; used: number;
   const pct = unlimited || limit === 0 ? 0 : Math.min(100, Math.round((used / limit) * 100))
   const near = pct >= 90
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div className="row" style={{ marginBottom: 4 }}>
-        <span>{label}</span>
-        <span className="muted">
+    <div className={`meter${near ? ' warn' : ''}`}>
+      <div className="row" style={{ marginBottom: 6 }}>
+        <span style={{ fontSize: 14 }}>{label}</span>
+        <span className="hint">
           {used}
-          {unit} {unlimited ? '/ unlimited' : `/ ${limit}${unit}`}
+          {unit} {unlimited ? '· unlimited' : `/ ${limit}${unit}`}
         </span>
       </div>
-      <div className={`bar${near ? ' warn' : ''}`}>
+      <div className="bar">
         <span style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -37,32 +37,33 @@ export function SubscriptionPage() {
 
   return (
     <div>
-      <h1>Subscription</h1>
+      <div className="page-head">
+        <h1>Subscription</h1>
+        <p>Your plan and how much of it you're using.</p>
+      </div>
 
       <div className="card">
         <div className="row">
-          <div>
-            <strong style={{ textTransform: 'capitalize' }}>{me.plan}</strong>
-            <span className="badge" style={{ marginLeft: 8 }}>{me.status}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="pill">{me.plan}</span>
+            <span className="hint">{me.status}</span>
           </div>
-          <span style={{ color: me.isActive ? 'var(--ok)' : 'var(--muted)' }}>
+          <span style={{ fontSize: 14, color: me.isActive ? 'var(--ok)' : 'var(--text-3)', fontWeight: 500 }}>
             {me.isActive ? 'Active' : 'Inactive'}
           </span>
         </div>
         {me.currentPeriodEndUtc && (
-          <p className="muted" style={{ marginBottom: 0 }}>
+          <p className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
             Renews {new Date(me.currentPeriodEndUtc).toLocaleDateString()}
           </p>
         )}
       </div>
 
       <div className="card">
-        <strong>Usage</strong>
-        <div style={{ marginTop: 12 }}>
-          <Meter label="Projects" used={me.usage.projects} limit={me.limits.maxProjects} />
-          <Meter label="Surveys this month" used={me.usage.surveysThisMonth} limit={me.limits.maxSurveysPerMonth} />
-          <Meter label="Storage" used={me.usage.storageMb} limit={me.limits.storageQuotaMb} unit=" MB" />
-        </div>
+        <div className="card-title">Usage</div>
+        <Meter label="Projects" used={me.usage.projects} limit={me.limits.maxProjects} />
+        <Meter label="Surveys this month" used={me.usage.surveysThisMonth} limit={me.limits.maxSurveysPerMonth} />
+        <Meter label="Storage" used={me.usage.storageMb} limit={me.limits.storageQuotaMb} unit=" MB" />
       </div>
     </div>
   )

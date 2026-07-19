@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { Plus } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
 import type { ProjectResponse } from '../lib/types'
 
@@ -33,7 +34,6 @@ export function ProjectsPage() {
       setDescription('')
       load()
     } catch (e) {
-      // A quota rejection is a normal state, not a crash — show the plan message plainly.
       setError(e instanceof ApiError ? e.message : 'Failed to create project.')
     } finally {
       setCreating(false)
@@ -42,36 +42,38 @@ export function ProjectsPage() {
 
   return (
     <div>
-      <div className="row">
+      <div className="page-head">
         <h1>Projects</h1>
+        <p>Each project is a separate survey — its own points, photos and form.</p>
       </div>
 
-      <form onSubmit={create} className="card">
-        <strong>New project</strong>
-        <label>Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} required />
-        <label>Description (optional)</label>
-        <input value={description} onChange={(e) => setDescription(e.target.value)} />
-        <button type="submit" disabled={creating} style={{ marginTop: 14 }}>
-          {creating ? 'Creating…' : 'Create project'}
-        </button>
-      </form>
+      <div className="card">
+        <div className="card-title">New project</div>
+        <form onSubmit={create}>
+          <label>Name</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sekadau" required />
+          <label>Description (optional)</label>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} />
+          <button type="submit" disabled={creating} style={{ marginTop: 16 }}>
+            <Plus size={16} style={{ verticalAlign: -3, marginRight: 6 }} />
+            {creating ? 'Creating…' : 'Create project'}
+          </button>
+        </form>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
       {projects === null && !error && <p className="muted">Loading…</p>}
-      {projects?.length === 0 && <p className="muted">No projects yet. Create your first one above.</p>}
+      {projects?.length === 0 && <div className="empty">No projects yet. Create your first one above.</div>}
 
       {projects?.map((p) => (
-        <div key={p.id} className="card row">
+        <Link key={p.id} to={`/projects/${p.id}`} className="list-row">
           <div>
-            <Link to={`/projects/${p.id}`} style={{ fontWeight: 500 }}>
-              {p.name}
-            </Link>
-            {p.description && <div className="muted" style={{ fontSize: 14 }}>{p.description}</div>}
+            <div style={{ fontWeight: 500, color: 'var(--text)' }}>{p.name}</div>
+            {p.description && <div className="hint">{p.description}</div>}
           </div>
-          <span className="badge">{p.surveyCount} surveys</span>
-        </div>
+          <span className="badge accent">{p.surveyCount} surveys</span>
+        </Link>
       ))}
     </div>
   )

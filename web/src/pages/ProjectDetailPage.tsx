@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import type { FormField, ProjectResponse } from '../lib/types'
 
@@ -30,33 +31,40 @@ export function ProjectDetailPage() {
 
   return (
     <div>
-      <p><Link to="/projects">← Projects</Link></p>
-      <div className="row">
-        <h1>{project.name}</h1>
-        <span className="badge">{project.surveyCount} surveys</span>
+      <Link to="/projects" className="hint" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <ArrowLeft size={14} /> Projects
+      </Link>
+
+      <div className="page-head" style={{ marginTop: 10 }}>
+        <div className="row">
+          <h1>{project.name}</h1>
+          <span className="badge accent">{project.surveyCount} surveys</span>
+        </div>
+        {project.description && <p>{project.description}</p>}
       </div>
-      {project.description && <p className="muted">{project.description}</p>}
 
       <div className="card">
-        <strong>Form schema</strong>
+        <div className="card-title">Survey form</div>
         {fields.length === 0 ? (
-          <p className="muted" style={{ marginBottom: 0 }}>No fields defined for this project's survey form.</p>
+          <p className="hint" style={{ marginBottom: 0 }}>
+            No fields defined yet. These are the questions a surveyor fills in at each point.
+          </p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 13 }}>
-                <th style={{ padding: '6px 0' }}>Key</th>
-                <th>Label</th>
-                <th>Type</th>
-                <th>Required</th>
+              <tr style={{ textAlign: 'left', color: 'var(--text-3)', fontSize: 12 }}>
+                <th style={{ padding: '6px 0', fontWeight: 500 }}>Field</th>
+                <th style={{ fontWeight: 500 }}>Label</th>
+                <th style={{ fontWeight: 500 }}>Type</th>
+                <th style={{ fontWeight: 500 }}>Required</th>
               </tr>
             </thead>
             <tbody>
               {fields.map((f) => (
                 <tr key={f.key} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={{ padding: '6px 0', fontFamily: 'monospace' }}>{f.key}</td>
+                  <td style={{ padding: '9px 0', fontFamily: 'ui-monospace, monospace', fontSize: 13 }}>{f.key}</td>
                   <td>{f.label ?? '—'}</td>
-                  <td>{f.type}</td>
+                  <td className="muted">{f.type}</td>
                   <td>{f.required ? 'yes' : 'no'}</td>
                 </tr>
               ))}

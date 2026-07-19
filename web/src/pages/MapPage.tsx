@@ -116,9 +116,11 @@ export function MapPage() {
   if (premiumRequired) {
     return (
       <div>
-        <h1>Survey map</h1>
+        <div className="page-head">
+          <h1>Survey map</h1>
+        </div>
         <div className="card">
-          <strong>Premium feature</strong>
+          <div className="card-title">Premium feature</div>
           <p className="muted" style={{ marginBottom: 0 }}>
             Viewing surveys on a map is available on the Premium plan. Your surveys are still being
             collected — upgrade to see them plotted here.
@@ -136,9 +138,11 @@ export function MapPage() {
 
   return (
     <div>
-      <div className="row">
-        <h1>Survey map</h1>
-        <span className="badge">{features.length} points</span>
+      <div className="page-head">
+        <div className="row">
+          <h1>Survey map</h1>
+          <span className="badge accent">{features.length} points</span>
+        </div>
       </div>
       {error && <p className="error">{error}</p>}
 

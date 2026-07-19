@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { FolderKanban, Map, CreditCard, LogOut, MapPin } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 export function Layout() {
@@ -10,21 +11,40 @@ export function Layout() {
   }
 
   return (
-    <div>
-      <header className="nav">
-        <span className="brand">GeoFold</span>
-        <nav>
-          <NavLink to="/projects">Projects</NavLink>
-          <NavLink to="/map">Map</NavLink>
-          <NavLink to="/subscription">Subscription</NavLink>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="mark">
+            <MapPin size={16} />
+          </span>
+          GeoFold
+        </div>
+
+        <nav className="side-nav">
+          <NavLink to="/projects">
+            <FolderKanban /> Projects
+          </NavLink>
+          <NavLink to="/map">
+            <Map /> Map
+          </NavLink>
+          <NavLink to="/subscription">
+            <CreditCard /> Subscription
+          </NavLink>
         </nav>
-        <button className="ghost" onClick={signOut}>
-          Sign out
-        </button>
-      </header>
-      <main className="container">
-        <Outlet />
-      </main>
+
+        <div className="side-foot">
+          <button className="ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={signOut}>
+            <LogOut size={16} style={{ verticalAlign: -3, marginRight: 6 }} />
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      <div className="content">
+        <div className="container">
+          <Outlet />
+        </div>
+      </div>
     </div>
   )
 }
