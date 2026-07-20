@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Pencil } from 'lucide-react'
 import { api } from '../lib/api'
 import type { FormField, ProjectResponse } from '../lib/types'
 
@@ -38,7 +38,14 @@ export function ProjectDetailPage() {
       <div className="page-head" style={{ marginTop: 10 }}>
         <div className="row">
           <h1>{project.name}</h1>
-          <span className="badge accent">{project.surveyCount} surveys</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="badge accent">{project.surveyCount} surveys</span>
+            <Link to={`/projects/${project.id}/edit`}>
+              <button className="ghost" style={{ padding: '7px 12px' }}>
+                <Pencil size={14} style={{ verticalAlign: -2, marginRight: 5 }} /> Edit
+              </button>
+            </Link>
+          </div>
         </div>
         {project.description && <p>{project.description}</p>}
       </div>
