@@ -1,13 +1,17 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace GeoFold.Api.DTOs;
 
+// Attributes sit on the constructor parameters, not [property:] — MVC throws for records with
+// validation metadata on the generated properties instead.
 public record UpsertSurveyRequest(
     Guid Id, // client-generated UUID, idempotency key
     Guid ProjectId,
-    double Latitude,
-    double Longitude,
+    [Range(-90, 90)] double Latitude,
+    [Range(-180, 180)] double Longitude,
     double? AccuracyMeters,
     DateTime CapturedAtUtc,
-    string? DetailsJson);
+    [MaxLength(20_000)] string? DetailsJson);
 
 public record SurveyResponse(
     Guid Id,

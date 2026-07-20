@@ -46,6 +46,17 @@ public class SupabaseStorageService : IStorageService
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<long?> GetSizeAsync(string objectPath, CancellationToken ct = default)
+    {
+        // HEAD on the object returns the stored length without transferring the file.
+        using var request = new HttpRequestMessage(
+            HttpMethod.Head, $"/storage/v1/object/{_options.StorageBucket}/{objectPath}");
+        using var response = await _http.SendAsync(request, ct);
+
+        if (!response.IsSuccessStatusCode) return null;
+        return response.Content.Headers.ContentLength;
+    }
+
     private record SignedUploadUrlResponse(string Url);
     private record SignedDownloadUrlResponse(string SignedURL);
 }

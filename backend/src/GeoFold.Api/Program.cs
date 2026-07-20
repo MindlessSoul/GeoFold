@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using GeoFold.Api.Authentication;
 using GeoFold.Api.Authorization;
 using GeoFold.Api.Data;
@@ -6,6 +8,7 @@ using GeoFold.Api.Quota;
 using GeoFold.Api.Services;
 using GeoFold.Api.Sync;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NetTopologySuite;
@@ -16,6 +19,30 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Generic ProblemDetails for unhandled errors, so failures never leak stack traces in production.
+builder.Services.AddProblemDetails();
+
+// Rate limiting. Buckets are per authenticated user, falling back to remote IP for anonymous
+// traffic, so one abusive caller can't exhaust the API (or run up storage/DB cost) for everyone.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+    {
+        var key = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                  ?? context.User.FindFirstValue("sub")
+                  ?? context.Connection.RemoteIpAddress?.ToString()
+                  ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+});
 
 // CORS for the separate SPA frontend. Bearer-token auth (no cookies), so credentials aren't needed.
 var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -60,12 +87,21 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseExceptionHandler();
+}
 
 app.UseHttpsRedirection();
 
 app.UseCors();
 
 app.UseAuthentication();
+
+// After authentication so limits are per user where possible, before authorization so a flood
+// never reaches the database.
+app.UseRateLimiter();
+
 app.UseAuthorization();
 
 app.MapControllers();
