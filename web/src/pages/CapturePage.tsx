@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Camera, MapPin, RefreshCw, Check } from 'lucide-react'
 import { api, ApiError } from '../lib/api'
+import { DEMO_MODE } from '../lib/demo'
 import { buildDetails, getPosition, watermarkPhoto } from '../lib/capture'
 import type { FormField, InitiatePhotoResponse, ProjectResponse } from '../lib/types'
 
@@ -45,6 +46,11 @@ export function CapturePage() {
     setGpsBusy(true)
     setGpsError(null)
     try {
+      if (DEMO_MODE) {
+        // Sample coordinate so the demo doesn't need a location permission prompt.
+        setPos({ coords: { latitude: -0.037622, longitude: 111.283981, accuracy: 6 } } as GeolocationPosition)
+        return
+      }
       setPos(await getPosition())
     } catch (e) {
       setGpsError(e instanceof Error ? e.message : 'Could not get location.')
@@ -107,15 +113,17 @@ export function CapturePage() {
         }),
       })
 
-      const put = await fetch(init.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: stamped,
-      })
-      if (!put.ok) throw new Error(`Photo upload failed (${put.status}).`)
+      if (!DEMO_MODE) {
+        const put = await fetch(init.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'image/jpeg' },
+          body: stamped,
+        })
+        if (!put.ok) throw new Error(`Photo upload failed (${put.status}).`)
 
-      setStep('Finishing…')
-      await api(`/api/v1/surveys/${surveyId}/photos/${photoId}/complete`, { method: 'POST' })
+        setStep('Finishing…')
+        await api(`/api/v1/surveys/${surveyId}/photos/${photoId}/complete`, { method: 'POST' })
+      }
 
       setDone(true)
       setStep(null)

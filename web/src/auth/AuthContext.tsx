@@ -2,6 +2,10 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+import { DEMO_MODE } from '../lib/demo'
+
+// A stand-in session so the route guard lets you into the app in demo mode without a real login.
+const DEMO_SESSION = { user: { email: 'demo@geofold.app' } } as unknown as Session
 
 interface AuthValue {
   session: Session | null
@@ -18,6 +22,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (DEMO_MODE) {
+      setSession(DEMO_SESSION)
+      setLoading(false)
+      return
+    }
+
     // Supabase persists the session and refreshes tokens on its own; we just mirror it into React.
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { DEMO_MODE, demoResponse } from './demo'
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5234'
 
@@ -25,6 +26,12 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (DEMO_MODE) {
+    // Small delay so loading states are visible; returns sample data, never touches the network.
+    await new Promise((r) => setTimeout(r, 180))
+    return demoResponse<T>(path, options)
+  }
+
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
