@@ -1,9 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Camera, FolderKanban, Map, CreditCard, LogOut, MapPin } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { SyncProvider, useSync } from '../lib/SyncContext'
 
-export function Layout() {
+function Shell() {
   const navigate = useNavigate()
+  const { pending, syncing } = useSync()
 
   const signOut = async () => {
     await supabase.auth.signOut()
@@ -23,6 +25,11 @@ export function Layout() {
         <nav className="side-nav">
           <NavLink to="/capture">
             <Camera /> Capture
+            {pending > 0 && (
+              <span className="badge accent" style={{ marginLeft: 'auto' }}>
+                {syncing ? '…' : pending}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/projects">
             <FolderKanban /> Projects
@@ -49,5 +56,13 @@ export function Layout() {
         </div>
       </div>
     </div>
+  )
+}
+
+export function Layout() {
+  return (
+    <SyncProvider>
+      <Shell />
+    </SyncProvider>
   )
 }

@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Camera, MapPin, RefreshCw, Check } from 'lucide-react'
-import { api, ApiError } from '../lib/api'
+import { Camera, MapPin, RefreshCw, Check, CloudUpload } from 'lucide-react'
+import { api } from '../lib/api'
 import { DEMO_MODE } from '../lib/demo'
+import { addItem } from '../lib/outbox'
+import { useSync } from '../lib/SyncContext'
 import { buildDetails, getPosition, watermarkPhoto } from '../lib/capture'
-import type { FormField, InitiatePhotoResponse, ProjectResponse } from '../lib/types'
+import type { FormField, ProjectResponse } from '../lib/types'
+
+const PROJECTS_CACHE = 'geofold.projects'
 
 function parseSchema(json: string): FormField[] {
   try {
@@ -16,6 +20,7 @@ function parseSchema(json: string): FormField[] {
 }
 
 export function CapturePage() {
+  const { pending, syncing, refresh, syncNow } = useSync()
   const [projects, setProjects] = useState<ProjectResponse[] | null>(null)
   const [projectId, setProjectId] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -24,7 +29,7 @@ export function CapturePage() {
   const [gpsBusy, setGpsBusy] = useState(false)
   const [gpsError, setGpsError] = useState<string | null>(null)
   const [values, setValues] = useState<Record<string, string | boolean>>({})
-  const [step, setStep] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
@@ -32,9 +37,15 @@ export function CapturePage() {
     api<ProjectResponse[]>('/api/v1/projects')
       .then((p) => {
         setProjects(p)
+        localStorage.setItem(PROJECTS_CACHE, JSON.stringify(p))
         if (p.length === 1) setProjectId(p[0].id)
       })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load projects.'))
+      .catch(() => {
+        // Backend asleep or offline: fall back to the last projects we saw so capture still works.
+        const cached = localStorage.getItem(PROJECTS_CACHE)
+        if (cached) setProjects(JSON.parse(cached))
+        else setError('Could not load projects. Connect once to load them, then capture works offline.')
+      })
   }, [])
 
   const fields = useMemo(() => {
@@ -47,7 +58,6 @@ export function CapturePage() {
     setGpsError(null)
     try {
       if (DEMO_MODE) {
-        // Sample coordinate so the demo doesn't need a location permission prompt.
         setPos({ coords: { latitude: -0.037622, longitude: 111.283981, accuracy: 6 } } as GeolocationPosition)
         return
       }
@@ -63,73 +73,48 @@ export function CapturePage() {
     const f = e.target.files?.[0] ?? null
     setFile(f)
     setPreviewUrl(f ? URL.createObjectURL(f) : null)
-    // Grab location as soon as a photo is taken, so it reflects where the shot happened.
     if (f && !pos) captureGps()
   }
 
-  const canSubmit = projectId && file && pos && !step
+  const canSave = projectId && file && pos && !saving
 
-  const submit = async () => {
+  // Saves to the device immediately, then syncs in the background — never waits on the network.
+  const save = async () => {
     if (!file || !pos) return
     setError(null)
+    setSaving(true)
     try {
       const capturedAtUtc = new Date().toISOString()
       const lat = pos.coords.latitude
       const lng = pos.coords.longitude
-      const surveyId = crypto.randomUUID()
 
-      setStep('Saving survey…')
-      await api('/api/v1/surveys', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: surveyId,
-          projectId,
-          latitude: lat,
-          longitude: lng,
-          accuracyMeters: pos.coords.accuracy,
-          capturedAtUtc,
-          detailsJson: JSON.stringify(buildDetails(fields, values)),
-        }),
-      })
-
-      setStep('Stamping photo…')
       const stamped = await watermarkPhoto(file, [
         `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
         new Date(capturedAtUtc).toLocaleString(),
       ])
 
-      setStep('Uploading photo…')
-      const photoId = crypto.randomUUID()
-      const init = await api<InitiatePhotoResponse>(`/api/v1/surveys/${surveyId}/photos/initiate`, {
-        method: 'POST',
-        body: JSON.stringify({
-          id: photoId,
-          fileName: 'photo.jpg',
-          contentType: 'image/jpeg',
-          sizeBytes: stamped.size,
-          latitude: lat,
-          longitude: lng,
-          capturedAtUtc,
-        }),
+      await addItem({
+        id: crypto.randomUUID(),
+        projectId,
+        projectName: projects?.find((p) => p.id === projectId)?.name ?? '',
+        latitude: lat,
+        longitude: lng,
+        accuracyMeters: pos.coords.accuracy,
+        capturedAtUtc,
+        detailsJson: JSON.stringify(buildDetails(fields, values)),
+        photo: stamped,
+        photoId: crypto.randomUUID(),
+        status: 'pending',
+        createdAt: Date.now(),
       })
 
-      if (!DEMO_MODE) {
-        const put = await fetch(init.uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'image/jpeg' },
-          body: stamped,
-        })
-        if (!put.ok) throw new Error(`Photo upload failed (${put.status}).`)
-
-        setStep('Finishing…')
-        await api(`/api/v1/surveys/${surveyId}/photos/${photoId}/complete`, { method: 'POST' })
-      }
-
+      await refresh()
+      void syncNow() // fire and forget
       setDone(true)
-      setStep(null)
     } catch (e) {
-      setStep(null)
-      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Something went wrong.')
+      setError(e instanceof Error ? e.message : 'Could not save the survey.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -150,8 +135,12 @@ export function CapturePage() {
             color: 'var(--accent-ink)', display: 'grid', placeItems: 'center', margin: '0 auto 12px' }}>
             <Check size={24} />
           </div>
-          <div className="card-title" style={{ justifyContent: 'center' }}>Survey saved</div>
-          <p className="muted">Photo, location and description were uploaded.</p>
+          <div className="card-title" style={{ justifyContent: 'center' }}>Saved to your device</div>
+          <p className="muted">
+            {pending > 0
+              ? `${pending} survey${pending > 1 ? 's' : ''} syncing in the background — you can keep working, even offline.`
+              : 'Uploaded.'}
+          </p>
           <button onClick={reset} style={{ marginTop: 8 }}>
             <Camera size={16} style={{ verticalAlign: -3, marginRight: 6 }} /> Capture another
           </button>
@@ -164,8 +153,22 @@ export function CapturePage() {
     <div style={{ maxWidth: 480, margin: '0 auto' }}>
       <div className="page-head">
         <h1>Capture</h1>
-        <p>Take a photo at a location, add a description, and save it.</p>
+        <p>Take a photo at a location, add a description, and save. Works offline.</p>
       </div>
+
+      {(pending > 0 || syncing) && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
+          {syncing ? <span className="spinner" /> : <CloudUpload size={18} style={{ color: 'var(--accent)' }} />}
+          <span style={{ fontSize: 14 }}>
+            {syncing ? 'Syncing…' : `${pending} waiting to sync`}
+          </span>
+          {!syncing && pending > 0 && (
+            <button className="ghost" onClick={() => void syncNow()} style={{ marginLeft: 'auto', padding: '6px 12px' }}>
+              Sync now
+            </button>
+          )}
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
 
@@ -196,14 +199,7 @@ export function CapturePage() {
             </>
           )}
         </label>
-        <input
-          id="photo"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={onPickPhoto}
-          style={{ display: 'none' }}
-        />
+        <input id="photo" type="file" accept="image/*" capture="environment" onChange={onPickPhoto} style={{ display: 'none' }} />
 
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
           <MapPin size={18} style={{ color: 'var(--accent)' }} />
@@ -260,11 +256,9 @@ export function CapturePage() {
         </div>
       )}
 
-      <button onClick={submit} disabled={!canSubmit} style={{ width: '100%', padding: 13 }}>
-        {step ? (
-          <>
-            <span className="spinner" style={{ marginRight: 8 }} /> {step}
-          </>
+      <button onClick={save} disabled={!canSave} style={{ width: '100%', padding: 13 }}>
+        {saving ? (
+          <><span className="spinner" style={{ marginRight: 8 }} /> Saving…</>
         ) : (
           'Save survey'
         )}
