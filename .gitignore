@@ -34,6 +34,7 @@ Thumbs.db
 .env
 appsettings.*.Local.json
 secrets.json
+deploy/cloudrun.env.yaml
 
 # Claude local (personal) settings — keep shared .claude/settings.json if added later
 .claude/settings.local.json

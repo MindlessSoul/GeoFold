@@ -1,0 +1,11 @@
+# Keep the build context small and never ship build output, the frontend, or secrets.
+**/bin/
+**/obj/
+**/node_modules/
+web/
+.git/
+.vs/
+.idea/
+**/*.user
+deploy/cloudrun.env.yaml
+backend/src/GeoFold.Api/appsettings.Development.json
