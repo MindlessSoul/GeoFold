@@ -16,6 +16,12 @@ using NetTopologySuite.Geometries;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Render and Cloud Run tell the container which port to listen on via PORT. Honour it when set,
+// otherwise fall back to the image default (8080) for local runs.
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
