@@ -90,7 +90,20 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler();
+    // Tell browsers to stick to HTTPS for this host on subsequent visits.
+    app.UseHsts();
 }
+
+// Baseline hardening headers on every response. This is a JSON API, so the important ones are
+// no MIME sniffing, no framing, and not leaking the URL to third parties via Referer.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
 
 app.UseHttpsRedirection();
 
