@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { warmBackend } from './api'
 import { pendingCount } from './outbox'
 import { syncAll } from './sync'
 
@@ -37,6 +38,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   useEffect(() => {
+    warmBackend() // start waking a cold backend the moment the app opens
     void syncNow()
     // Retry whenever the device comes back online, plus a slow tick to catch a woken backend.
     const onOnline = () => void syncNow()

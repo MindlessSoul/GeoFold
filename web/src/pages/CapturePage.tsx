@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Camera, MapPin, RefreshCw, Check, CloudUpload } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, warmBackend } from '../lib/api'
 import { DEMO_MODE } from '../lib/demo'
 import { addItem } from '../lib/outbox'
 import { useSync } from '../lib/SyncContext'
@@ -34,6 +34,7 @@ export function CapturePage() {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
+    warmBackend() // opening capture is the strongest signal a survey (and sync) is imminent
     api<ProjectResponse[]>('/api/v1/projects')
       .then((p) => {
         setProjects(p)

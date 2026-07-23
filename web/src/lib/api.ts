@@ -25,6 +25,13 @@ async function authHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+// Fire-and-forget wake-up: pokes the health endpoint so a cold-started backend begins booting
+// while the user is still working, so the background sync lands sooner. No-op in demo.
+export function warmBackend(): void {
+  if (DEMO_MODE) return
+  fetch(`${BASE}/health`, { method: 'GET', keepalive: true }).catch(() => {})
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (DEMO_MODE) {
     // Small delay so loading states are visible; returns sample data, never touches the network.

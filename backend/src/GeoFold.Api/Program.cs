@@ -104,6 +104,13 @@ app.UseRateLimiter();
 
 app.UseAuthorization();
 
+// Public, dependency-free liveness probe. Doubles as the pre-warm target the SPA pings so the
+// container wakes from a cold start while the user is still filling in a survey, and as the
+// health endpoint for Render / an uptime pinger. Excluded from rate limiting.
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }))
+    .AllowAnonymous()
+    .DisableRateLimiting();
+
 app.MapControllers();
 
 app.Run();
