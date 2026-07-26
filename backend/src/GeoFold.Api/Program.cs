@@ -8,6 +8,7 @@ using GeoFold.Api.Quota;
 using GeoFold.Api.Services;
 using GeoFold.Api.Sync;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -87,6 +88,18 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("PremiumOnly", p => p.Requirements.Add(new ActiveSubscriptionRequirement()));
 
 var app = builder.Build();
+
+// Must run first. Render/Cloud Run terminate TLS at the edge and forward plain HTTP, so without
+// this the app believes every request is insecure and sees the proxy's IP: HSTS would never be
+// sent, and the rate limiter would lump all anonymous callers into a single bucket. The platform
+// edge is the only thing that can set these headers, so the proxy list is intentionally open.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
 
 if (app.Environment.IsDevelopment())
 {
