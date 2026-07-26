@@ -38,3 +38,4 @@ deploy/cloudrun.env.yaml
 
 # Claude local (personal) settings — keep shared .claude/settings.json if added later
 .claude/settings.local.json
+next/_seed.mjs
