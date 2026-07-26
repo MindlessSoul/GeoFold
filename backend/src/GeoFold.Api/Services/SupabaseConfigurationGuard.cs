@@ -7,12 +7,11 @@ namespace GeoFold.Api.Services;
 /// stops the app with an actionable message instead of letting it serve traffic that only fails
 /// later (the old behaviour: boots fine, Swagger works, every API call returns 500).
 /// <para>
-/// KNOWN GAP: this does not fire yet. Booting with the placeholder <c>appsettings.json</c>
-/// (Supabase:Url still "https://YOUR-PROJECT.supabase.co", empty ServiceRoleKey) still produces a
-/// healthy server, so <see cref="SupabaseOptionsValidator"/> is not being invoked on this path.
-/// <c>OptionsBuilder.ValidateOnStart()</c> did not fire either. Root cause not yet identified — do
-/// not rely on this guard for config safety until it is fixed and re-verified by booting with
-/// placeholder config and observing a startup failure.
+/// This works: booting in Production with the placeholder <c>appsettings.json</c> aborts startup
+/// with the actionable message. It previously looked broken only because it was always tested in
+/// Development, where <c>appsettings.Development.json</c> supplies real config, so the validator
+/// had nothing to reject. Verified 2026-07 by running with ASPNETCORE_ENVIRONMENT=Production and
+/// placeholder config (host failed to start) and again with real config injected (booted clean).
 /// </para>
 /// <para>
 /// Hosted services do not run under <c>dotnet ef</c> design-time (it builds the host but never
@@ -28,8 +27,8 @@ public sealed class SupabaseConfigurationGuard : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        // Touching .Value is meant to run SupabaseOptionsValidator and throw
-        // OptionsValidationException, aborting startup. See the KNOWN GAP note above.
+        // Touching .Value runs SupabaseOptionsValidator; a failure throws OptionsValidationException
+        // and aborts startup with the actionable message.
         _ = _options.Value;
         return Task.CompletedTask;
     }

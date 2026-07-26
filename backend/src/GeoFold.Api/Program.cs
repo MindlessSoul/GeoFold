@@ -66,8 +66,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddSingleton<GeometryFactory>(
     NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326));
 
-// Meant to fail fast on missing/placeholder Supabase config instead of booting an app whose every
-// authenticated request dies later. NOTE: the guard does not fire yet — see SupabaseConfigurationGuard.
+// Fails fast on missing/placeholder Supabase config (via SupabaseConfigurationGuard) instead of
+// booting an app whose every authenticated request would die later.
 builder.Services.AddSingleton<IValidateOptions<SupabaseOptions>, SupabaseOptionsValidator>();
 builder.Services.AddOptions<SupabaseOptions>()
     .Bind(builder.Configuration.GetSection(SupabaseOptions.SectionName));
