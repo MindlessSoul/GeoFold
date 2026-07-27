@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Archivo, Space_Mono } from 'next/font/google'
 import './globals.css'
+import { Providers } from './providers'
 
 const archivo = Archivo({
   variable: '--font-sans',
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
