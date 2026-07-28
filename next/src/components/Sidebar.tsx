@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Camera, FolderKanban, Map as MapIcon, CreditCard, LogOut, MapPin } from 'lucide-react'
+import { LayoutGrid, Camera, FolderKanban, Map as MapIcon, CreditCard, LogOut, MapPin } from 'lucide-react'
 import { useSync } from '@/lib/SyncContext'
+import { useAuth } from '@/lib/AuthContext'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { DEMO_MODE } from '@/lib/demo'
 import { ThemeToggle } from './ThemeToggle'
 
 const items = [
+  { href: '/home', label: 'Overview', icon: LayoutGrid },
   { href: '/capture', label: 'Capture', icon: Camera },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/map', label: 'Map', icon: MapIcon },
@@ -19,9 +21,11 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { pending, syncing } = useSync()
+  const { exitDemo } = useAuth()
 
   const signOut = async () => {
-    if (!DEMO_MODE) await createSupabaseBrowserClient().auth.signOut()
+    if (DEMO_MODE) exitDemo()
+    else await createSupabaseBrowserClient().auth.signOut()
     router.replace('/login')
   }
 

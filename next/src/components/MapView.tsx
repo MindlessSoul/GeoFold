@@ -63,11 +63,11 @@ function SurveyMarker({ feature }: { feature: SurveyFeatureCollection['features'
   )
 }
 
-export default function MapView({ features }: { features: SurveyFeatureCollection['features'] }) {
+export default function MapView({ features, height = '72vh' }: { features: SurveyFeatureCollection['features']; height?: string }) {
   const first = features[0]
   const center: [number, number] = first ? [first.geometry.coordinates[1], first.geometry.coordinates[0]] : [-2.5, 118]
   return (
-    <div style={{ height: '72vh', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)' }}>
+    <div style={{ height, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)' }}>
       <MapContainer center={center} zoom={first ? 12 : 5} style={{ height: '100%', width: '100%' }}>
         <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {features.map((f) => <SurveyMarker key={f.properties.id} feature={f} />)}

@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation'
 import { MapPin } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/AuthContext'
+import { DEMO_MODE } from '@/lib/demo'
 
 export default function LoginPage() {
-  const { session, loading } = useAuth()
+  const { session, loading, enterDemo } = useAuth()
   const router = useRouter()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
@@ -18,7 +19,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!loading && session) router.replace('/capture')
+    if (!loading && session) router.replace('/home')
   }, [loading, session, router])
 
   if (loading || session) return <div className="center">Loading…</div>
@@ -27,6 +28,10 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     setNotice(null)
+    if (DEMO_MODE) {
+      enterDemo() // no real backend configured yet — any credentials continue into the sample data
+      return
+    }
     setBusy(true)
     try {
       const supabase = createSupabaseBrowserClient()
@@ -51,6 +56,11 @@ export default function LoginPage() {
         <div className="brand"><span className="mark"><MapPin size={18} /></span>GeoFold</div>
         <div className="card">
           <div className="card-title">{mode === 'login' ? 'Sign in' : 'Create your account'}</div>
+          {DEMO_MODE && (
+            <p className="hint" style={{ marginTop: 0, marginBottom: 4 }}>
+              Demo mode — enter anything to explore with sample data.
+            </p>
+          )}
           <form onSubmit={submit}>
             <label>Email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
