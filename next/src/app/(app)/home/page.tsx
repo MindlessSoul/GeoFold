@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { Camera } from 'lucide-react'
@@ -13,13 +12,15 @@ const MapView = dynamic(() => import('@/components/MapView'), {
   loading: () => <div className="center" style={{ minHeight: '42vh' }}>Loading map…</div>,
 })
 
-function Metric({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div style={{ background: 'var(--surface-2)', borderRadius: 'var(--radius)', padding: '14px 16px' }}>
-      <div className="hint">{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 700, marginTop: 2 }}>{value}</div>
-    </div>
-  )
+const THUMBS = [
+  { bg: '#2c5a46', line: '#5e9a6b' },
+  { bg: '#b4633a', line: '#d89a6e' },
+  { bg: '#3e7c86', line: '#7fb8c0' },
+]
+
+function greeting() {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
 export default function HomePage() {
@@ -31,34 +32,60 @@ export default function HomePage() {
   useEffect(() => {
     api<ProjectResponse[]>('/api/projects').then(setProjects).catch(() => setProjects([]))
     api<SubscriptionMe>('/api/subscriptions/me').then(setMe).catch(() => {})
-    api<SurveyFeatureCollection>('/api/surveys/geojson')
-      .then(setFc)
-      .catch((e) => { if (e instanceof ApiError && e.status === 403) setMapPremium(true) })
+    api<SurveyFeatureCollection>('/api/surveys/geojson').then(setFc).catch((e) => {
+      if (e instanceof ApiError && e.status === 403) setMapPremium(true)
+    })
   }, [])
 
   const features = fc?.features ?? []
+  const points = features.length
 
   return (
     <div>
-      <div className="page-head">
-        <h1>Overview</h1>
-        <p>Your survey projects and where they are on the ground.</p>
+      <div className="hero">
+        <svg className="contour" viewBox="0 0 800 240" preserveAspectRatio="none" aria-hidden="true">
+          <g fill="none" stroke="#eaf1e9" strokeWidth="1.4">
+            <path d="M-20 70 C120 20 240 110 400 70 560 30 680 120 820 70" />
+            <path d="M-20 110 C120 60 240 150 400 110 560 70 680 160 820 110" />
+            <path d="M-20 150 C120 100 240 190 400 150 560 110 680 200 820 150" />
+            <path d="M-20 190 C120 140 240 230 400 190 560 150 680 240 820 190" />
+            <path d="M-20 30 C120 -10 240 70 400 30 560 -10 680 80 820 30" />
+          </g>
+        </svg>
+        <div className="in">
+          <div className="eyebrow">Field survey</div>
+          <h1>{greeting()}, surveyor</h1>
+          <p>Your projects and where they sit on the ground — capture from the field, review here.</p>
+          <div className="coordbar mono">◎ {points} survey point{points === 1 ? '' : 's'} mapped</div>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
-        <Metric label="Projects" value={me?.usage.projects ?? projects?.length ?? '—'} />
-        <Metric label="Surveys this month" value={me?.usage.surveysThisMonth ?? '—'} />
-        <Metric label="Storage" value={me ? `${me.usage.storageMb} MB` : '—'} />
+      <div className="stats">
+        <div className="stat">
+          <span className="accent" style={{ background: 'var(--spruce)' }} />
+          <div className="lbl"><span className="sdot" style={{ background: 'var(--spruce)' }} />Projects</div>
+          <div className="val">{me?.usage.projects ?? projects?.length ?? '—'}</div>
+        </div>
+        <div className="stat">
+          <span className="accent" style={{ background: 'var(--ochre)' }} />
+          <div className="lbl"><span className="sdot" style={{ background: 'var(--ochre)' }} />Surveys this month</div>
+          <div className="val">{me?.usage.surveysThisMonth ?? '—'}</div>
+        </div>
+        <div className="stat">
+          <span className="accent" style={{ background: 'var(--sky)' }} />
+          <div className="lbl"><span className="sdot" style={{ background: 'var(--sky)' }} />Storage</div>
+          <div className="val">{me ? me.usage.storageMb : '—'}<small> MB</small></div>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="card-title" style={{ margin: 0 }}>Survey locations</div>
-          {!mapPremium && <span className="badge accent">{features.length} points</span>}
+      <div className="panel">
+        <div className="phead">
+          <span className="card-title" style={{ margin: 0 }}>Survey locations</span>
+          {!mapPremium && <span className="badge accent">{points} points</span>}
         </div>
         {mapPremium ? (
-          <p className="muted" style={{ padding: '0 18px 18px', marginTop: 0 }}>
-            The map is a Premium feature — surveys are still being collected. <Link href="/subscription">Upgrade</Link> to see them here.
+          <p className="muted" style={{ padding: '0 18px 18px', marginTop: 14 }}>
+            The map is a Premium feature. <Link href="/subscription">Upgrade</Link> to see your points plotted.
           </p>
         ) : fc === null ? (
           <div className="center" style={{ minHeight: '42vh' }}>Loading…</div>
@@ -67,21 +94,33 @@ export default function HomePage() {
         )}
       </div>
 
-      <div className="row" style={{ margin: '24px 0 12px' }}>
+      <div className="row" style={{ margin: '22px 0 12px' }}>
         <h1 style={{ fontSize: 18 }}>Projects</h1>
         <Link href="/capture"><button><Camera size={16} style={{ verticalAlign: -3, marginRight: 6 }} /> New capture</button></Link>
       </div>
-
       {projects?.length === 0 && (
         <div className="empty">No projects yet. <Link href="/projects/new">Create your first one</Link>.</div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
-        {projects?.map((p) => (
-          <Link key={p.id} href={`/projects/${p.id}`} className="card" style={{ margin: 0 }}>
-            <div style={{ fontWeight: 500, color: 'var(--ink)' }}>{p.name}</div>
-            <div className="hint" style={{ marginTop: 2 }}>{p.surveyCount} surveys</div>
-          </Link>
-        ))}
+      <div className="pcard-grid">
+        {projects?.map((p, i) => {
+          const t = THUMBS[i % THUMBS.length]
+          return (
+            <Link key={p.id} href={`/projects/${p.id}`} className="pcard lift">
+              <div className="thumb">
+                <svg viewBox="0 0 44 44" aria-hidden="true">
+                  <rect width="44" height="44" fill={t.bg} />
+                  <g fill="none" stroke={t.line} strokeWidth="1.4">
+                    <path d="M-4 26 C10 18 22 30 48 20" /><path d="M-4 34 C10 26 22 38 48 28" />
+                  </g>
+                </svg>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{p.name}</div>
+                <div className="hint mono" style={{ marginTop: 2 }}>{p.surveyCount} surveys</div>
+              </div>
+            </Link>
+          )
+        })}
       </div>
     </div>
   )

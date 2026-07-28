@@ -2,20 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutGrid, Camera, FolderKanban, Map as MapIcon, CreditCard, LogOut, MapPin } from 'lucide-react'
+import { LogOut, MapPin } from 'lucide-react'
 import { useSync } from '@/lib/SyncContext'
 import { useAuth } from '@/lib/AuthContext'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { DEMO_MODE } from '@/lib/demo'
 import { ThemeToggle } from './ThemeToggle'
-
-const items = [
-  { href: '/home', label: 'Overview', icon: LayoutGrid },
-  { href: '/capture', label: 'Capture', icon: Camera },
-  { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/map', label: 'Map', icon: MapIcon },
-  { href: '/subscription', label: 'Subscription', icon: CreditCard },
-]
+import { navItems } from './navItems'
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -31,12 +24,9 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <span className="mark"><MapPin size={16} /></span>
-        GeoFold
-      </div>
+      <div className="brand"><span className="mark"><MapPin size={16} /></span>GeoFold</div>
       <nav className="side-nav">
-        {items.map(({ href, label, icon: Icon }) => (
+        {navItems.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={pathname.startsWith(href) ? 'active' : ''}>
             <Icon /> {label}
             {href === '/capture' && pending > 0 && (
@@ -45,7 +35,7 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
-      <div className="side-foot" style={{ display: 'flex', gap: 8 }}>
+      <div className="side-foot">
         <button className="ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={signOut}>
           <LogOut size={15} style={{ verticalAlign: -3, marginRight: 6 }} /> Sign out
         </button>
