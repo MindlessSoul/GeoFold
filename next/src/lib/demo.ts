@@ -51,6 +51,7 @@ export function demoResponse<T>(path: string, options: RequestInit): T {
   if (pm && method === 'PUT') return undefined as T
   if (clean === '/api/subscriptions/me') return me as T
   if (clean === '/api/surveys/geojson') return geojson as T
+  if (clean === '/api/surveys' && method === 'GET') return geojson.features.map((f) => surveyDetail(f.properties.id)) as T
   const sm = clean.match(/^\/api\/surveys\/([^/]+)$/)
   if (sm && method === 'GET') return surveyDetail(sm[1]) as T
   if (clean === '/api/surveys' && method === 'POST') return surveyDetail('s1') as T

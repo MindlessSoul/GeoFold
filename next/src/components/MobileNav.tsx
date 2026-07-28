@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, MapPin } from 'lucide-react'
+import { CreditCard, LogOut, MapPin } from 'lucide-react'
 import { useSync } from '@/lib/SyncContext'
 import { useAuth } from '@/lib/AuthContext'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -30,13 +30,14 @@ export function MobileNav() {
           <span className="mark" style={{ width: 24, height: 24 }}><MapPin size={14} /></span>GeoFold
         </div>
         <div className="actions">
+          <Link href="/subscription" aria-label="Subscription" className={`theme-toggle${pathname.startsWith('/subscription') ? ' active' : ''}`} style={{ display: 'grid', placeItems: 'center' }}><CreditCard size={16} /></Link>
           <ThemeToggle />
           <button className="ghost" onClick={signOut} aria-label="Sign out" style={{ padding: '7px 10px' }}><LogOut size={16} /></button>
         </div>
       </header>
 
       <nav className="mobile-bottom">
-        {navItems.map(({ href, short, icon: Icon }) => (
+        {navItems.filter((i) => i.bottom).map(({ href, short, icon: Icon }) => (
           <Link key={href} href={href} className={pathname.startsWith(href) ? 'active' : ''}>
             <Icon />
             {short}

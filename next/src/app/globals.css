@@ -174,3 +174,22 @@ button:disabled { opacity: 0.5; cursor: default; }
 .pcard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-sm); }
 .pcard .thumb { width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; overflow: hidden; position: relative; }
 .pcard .thumb svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* ---------- Records: filters, exports, record cards ---------- */
+.filters { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr; gap: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 14px 16px; margin-bottom: 14px; }
+.filters .fld { display: flex; flex-direction: column; min-width: 0; }
+.filters .fld label { margin: 0 0 5px; }
+.filters input, .filters select { padding: 8px 10px; }
+@media (max-width: 680px) { .filters { grid-template-columns: 1fr 1fr; } .filters .fld.wide { grid-column: 1 / -1; } }
+.exportbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.exportbar .btns { display: flex; gap: 8px; }
+.rec { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--sky); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 13px 16px; margin-bottom: 10px; }
+.rec.pending { border-left-color: var(--ochre); }
+.rec-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.rec-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 9px; font-size: 13px; color: var(--ink-2); }
+.rec-proj { font-weight: 600; color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; color: var(--ink-2); }
+.chip b { color: var(--ink); font-weight: 600; }
+.badge.status-synced { background: var(--spruce-soft); color: var(--spruce-ink); border-color: transparent; }
+.badge.status-pending { background: var(--ochre-soft); color: var(--ochre-ink); border-color: transparent; }
