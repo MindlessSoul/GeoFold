@@ -16,8 +16,13 @@ const spaceMono = Space_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'GeoFold',
-  description: 'Field GPS survey tool',
+  title: 'GeoFold — Field GPS survey tool',
+  description: 'Turn a phone into a field survey kit: geo-tagged photos, offline capture, and every point on a map you can export and report from.',
+  openGraph: {
+    title: 'GeoFold — Field GPS survey tool',
+    description: 'Geo-tagged photos, offline capture, and every survey point on a map you can export.',
+    type: 'website',
+  },
 }
 
 // Set the initial theme before paint to avoid a flash: honour a saved choice, else the OS setting.
