@@ -31,6 +31,12 @@ export default function LoginPage() {
     if (!loading && session) router.replace('/home')
   }, [loading, session, router])
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('error') === 'link_expired') {
+      setError('That link has expired or was already used. Enter your details to try again.')
+    }
+  }, [])
+
   if (loading || session) return <div className="center">Loading…</div>
 
   const switchMode = (m: Mode) => { setMode(m); setError(null); setNotice(null) }
@@ -50,12 +56,16 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       } else if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+        })
         if (error) throw error
-        if (!data.session) setNotice('Check your email to confirm your account, then sign in.')
+        if (!data.session) setNotice('Almost there — check your email for a confirmation link to finish signing up.')
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${location.origin}/reset`,
+          redirectTo: `${location.origin}/auth/callback?next=/reset`,
         })
         if (error) throw error
         setNotice('If that email has an account, a password reset link is on its way.')
