@@ -1,6 +1,7 @@
 import sql from './db'
 import { parseSchema, validateFormData } from './validation'
 import { checkSurveyCreation } from './quota'
+import { ensureProfile } from './profile'
 
 export interface UpsertSurveyInput {
   id: string
@@ -77,6 +78,8 @@ export async function upsertSurvey(userId: string, input: UpsertSurveyInput): Pr
 
   const quota = await checkSurveyCreation(userId)
   if (!quota.allowed) return { status: 'quota_exceeded', message: quota.message! }
+
+  await ensureProfile(userId)
 
   await sql`
     INSERT INTO surveys ("Id","ProjectId","UserId","Location","AccuracyMeters","CapturedAtUtc","SyncedAtUtc","Details","Status")

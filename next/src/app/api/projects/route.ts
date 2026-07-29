@@ -3,6 +3,7 @@ import sql from '@/lib/db'
 import { getUserId, unauthorized } from '@/lib/auth'
 import { parseSchema } from '@/lib/validation'
 import { checkProjectCreation } from '@/lib/quota'
+import { ensureProfile } from '@/lib/profile'
 import { quotaExceeded } from '@/lib/http'
 
 // jsonb columns are cast ::text so the wire shape matches the .NET DTO (formSchema is a JSON string).
@@ -36,6 +37,8 @@ export async function POST(req: Request) {
 
   const quota = await checkProjectCreation(userId)
   if (!quota.allowed) return quotaExceeded(quota.message)
+
+  await ensureProfile(userId)
 
   const [row] = await sql`
     INSERT INTO projects ("Id","UserId","Name","Description","FormSchema","CreatedAtUtc")
