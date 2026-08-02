@@ -6,31 +6,15 @@ import { Download, MapPin, Camera, Search } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import { csvBlob, xlsxBlob, download, type ExportRow, type XlsxImage } from '@/lib/export'
 import { buildReferences } from '@/lib/reference'
+import { parseDetails, detailText, labeledValues } from '@/lib/details'
+import { parseSchema } from '@/lib/validation'
 import type { ProjectResponse, SurveyDetail } from '@/lib/types'
 
 const BASE_COLUMNS = ['Reference', 'Project', 'Latitude', 'Longitude', 'Accuracy (m)', 'Captured At (UTC)', 'Status', 'Foto']
 
-function parseDetails(json: string | null): Record<string, unknown> {
-  if (!json) return {}
-  try {
-    const v = JSON.parse(json)
-    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
-  } catch {
-    return {}
-  }
-}
-
-function detailText(value: unknown): string {
-  if (value == null) return ''
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
-
 const dayString = (iso: string) => iso.slice(0, 10)
 
 // Fetch a photo's bytes (via its short-lived signed URL) for embedding into the Excel file.
-// Returns null for anything that isn't a PNG/JPEG (e.g. the demo SVG placeholder).
 async function fetchPhotoImage(surveyId: string, photoId: string): Promise<XlsxImage | null> {
   try {
     const { url } = await api<{ url: string }>(`/api/surveys/${surveyId}/photos/${photoId}/url`)
@@ -44,7 +28,7 @@ async function fetchPhotoImage(surveyId: string, photoId: string): Promise<XlsxI
   }
 }
 
-function PhotoThumb({ surveyId, photoId, onOpen }: { surveyId: string; photoId: string; onOpen: (url: string) => void }) {
+function PhotoThumb({ surveyId, photoId }: { surveyId: string; photoId: string }) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -56,17 +40,16 @@ function PhotoThumb({ surveyId, photoId, onOpen }: { surveyId: string; photoId: 
     return () => { alive = false }
   }, [surveyId, photoId])
 
-  if (failed) return null
+  if (failed) return <div className="rec-thumb-ph" />
   if (!url) return <div className="rec-thumb-ph" />
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="Survey photo" className="rec-thumb" onClick={() => onOpen(url)} />
+  return <img src={url} alt="Survey photo" className="rec-thumb" />
 }
 
 export default function SurveysPage() {
   const [surveys, setSurveys] = useState<SurveyDetail[] | null>(null)
   const [projects, setProjects] = useState<ProjectResponse[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [lightbox, setLightbox] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
 
   const [projectId, setProjectId] = useState('')
@@ -87,10 +70,13 @@ export default function SurveysPage() {
     return (id: string) => m.get(id) ?? '—'
   }, [projects])
 
-  const refOf = useMemo(
-    () => buildReferences(surveys ?? [], projectName),
-    [surveys, projectName],
-  )
+  // key -> label lookup per project, from each project's form schema.
+  const fieldsOf = useMemo(() => {
+    const m = new Map(projects.map((p) => [p.id, parseSchema(p.formSchema).fields]))
+    return (id: string) => m.get(id) ?? []
+  }, [projects])
+
+  const refOf = useMemo(() => buildReferences(surveys ?? [], projectName), [surveys, projectName])
 
   const statuses = useMemo(() => {
     const set = new Set<string>()
@@ -149,7 +135,6 @@ export default function SurveysPage() {
   const exportXlsx = async () => {
     setPreparing(true)
     try {
-      // Fetch the first photo of each record (in row order) to embed into the sheet.
       const images = await Promise.all(
         filtered.map((s) => (s.photos.length ? fetchPhotoImage(s.id, s.photos[0].id) : Promise.resolve(null))),
       )
@@ -230,11 +215,11 @@ export default function SurveysPage() {
       )}
 
       {filtered.map((s) => {
-        const details = Object.entries(parseDetails(s.detailsJson))
+        const values = labeledValues(parseDetails(s.detailsJson), fieldsOf(s.projectId)).filter((v) => v.value.trim())
         const pending = s.status.toLowerCase() === 'pending'
         return (
-          <div key={s.id} className={`rec${pending ? ' pending' : ''}`}>
-            {s.photos.length > 0 && <PhotoThumb surveyId={s.id} photoId={s.photos[0].id} onOpen={setLightbox} />}
+          <Link key={s.id} href={`/surveys/${s.id}`} className={`rec lift${pending ? ' pending' : ''}`}>
+            {s.photos.length > 0 && <PhotoThumb surveyId={s.id} photoId={s.photos[0].id} />}
             <div className="rec-body">
               <div className="rec-ref">{refOf.get(s.id) ?? s.id.slice(0, 8)}</div>
               <div className="rec-top">
@@ -247,22 +232,15 @@ export default function SurveysPage() {
                 {s.accuracyMeters != null && <span>±{Math.round(s.accuracyMeters)}m</span>}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Camera size={13} /> {s.photos.length}</span>
               </div>
-              {details.length > 0 && (
+              {values.length > 0 && (
                 <div className="chips">
-                  {details.map(([k, v]) => <span key={k} className="chip"><b>{k}:</b> {detailText(v) || '—'}</span>)}
+                  {values.map((v) => <span key={v.key} className="chip"><b>{v.label}:</b> {v.value}</span>)}
                 </div>
               )}
             </div>
-          </div>
+          </Link>
         )
       })}
-
-      {lightbox && (
-        <div className="lightbox" onClick={() => setLightbox(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="Survey photo" />
-        </div>
-      )}
     </div>
   )
 }
