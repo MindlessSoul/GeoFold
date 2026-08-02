@@ -31,6 +31,7 @@ export default function CapturePage() {
   const [gpsBusy, setGpsBusy] = useState(false)
   const [gpsError, setGpsError] = useState<string | null>(null)
   const [values, setValues] = useState<Record<string, string | boolean>>({})
+  const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
@@ -89,11 +90,13 @@ export default function CapturePage() {
       const lat = pos.coords.latitude
       const lng = pos.coords.longitude
       const stamped = await watermarkPhoto(file, [`${lat.toFixed(6)}, ${lng.toFixed(6)}`, new Date(capturedAtUtc).toLocaleString()])
+      const details = buildDetails(fields, values)
+      if (note.trim()) details.catatan = note.trim()
       await addItem({
         id: crypto.randomUUID(), projectId,
         projectName: projects?.find((p) => p.id === projectId)?.name ?? '',
         latitude: lat, longitude: lng, accuracyMeters: pos.coords.accuracy, capturedAtUtc,
-        detailsJson: JSON.stringify(buildDetails(fields, values)), photo: stamped,
+        detailsJson: JSON.stringify(details), photo: stamped,
         photoId: crypto.randomUUID(), status: 'pending', createdAt: Date.now(),
       })
       await refresh()
@@ -106,7 +109,7 @@ export default function CapturePage() {
     }
   }
 
-  const reset = () => { setFile(null); setPreviewUrl(null); setValues({}); setDone(false); setError(null); setPos(null) }
+  const reset = () => { setFile(null); setPreviewUrl(null); setValues({}); setNote(''); setDone(false); setError(null); setPos(null) }
 
   if (done) {
     return (
@@ -163,10 +166,13 @@ export default function CapturePage() {
         </div>
       </div>
 
-      {fields.length > 0 && (
-        <div className="card">
-          <div className="card-title">Description</div>
-          {fields.map((f) => (
+      <div className="card">
+        <div className="card-title">Description</div>
+        <label>Catatan</label>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Deskripsi lokasi / kondisi / keterangan…" />
+        {fields.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            {fields.map((f) => (
             <div key={f.key}>
               <label>{f.label ?? f.key}{f.required && <span style={{ color: 'var(--danger)' }}> *</span>}</label>
               {f.type.toLowerCase() === 'boolean' || f.type.toLowerCase() === 'bool' ? (
@@ -176,8 +182,9 @@ export default function CapturePage() {
               )}
             </div>
           ))}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
 
       <button onClick={save} disabled={!canSave} style={{ width: '100%', padding: 13 }}>
         {saving ? <><span className="spinner" style={{ marginRight: 8 }} /> Saving…</> : 'Save survey'}

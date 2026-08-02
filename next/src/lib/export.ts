@@ -1,8 +1,12 @@
-// Dependency-free exporters: CSV and a minimal (STORED, uncompressed) .xlsx writer.
-// An .xlsx is a ZIP of XML parts — we assemble it by hand so no library is needed.
+// Dependency-free exporters: CSV and a minimal (STORED, uncompressed) .xlsx writer
+// that can also embed photos. An .xlsx is a ZIP of XML parts — we assemble it by hand.
 
 export type Cell = string | number | null
 export type ExportRow = Record<string, Cell>
+export interface XlsxImage {
+  data: Uint8Array
+  ext: 'png' | 'jpeg'
+}
 
 // ---------- CSV ----------
 
@@ -19,6 +23,10 @@ export function csvBlob(headers: string[], rows: ExportRow[]): Blob {
 }
 
 // ---------- XLSX ----------
+
+const PX_TO_EMU = 9525
+const IMG_W = 120
+const IMG_H = 90
 
 function xmlEscape(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -41,20 +49,70 @@ function cellXml(ref: string, value: Cell): string {
   return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(s)}</t></is></c>`
 }
 
-function sheetXml(headers: string[], rows: ExportRow[]): string {
-  const parts: string[] = []
-  parts.push(`<row r="1">`)
-  headers.forEach((h, i) => parts.push(cellXml(`${colLetter(i)}1`, h)))
-  parts.push(`</row>`)
+interface ImageLayout {
+  colIndex: number
+  // survey/data-row index -> image index into the media array (only rows that have an image)
+  rowToImage: Map<number, number>
+}
+
+function sheetXml(headers: string[], rows: ExportRow[], layout: ImageLayout | null): string {
+  const rowsXml: string[] = []
+  rowsXml.push(`<row r="1">`)
+  headers.forEach((h, i) => rowsXml.push(cellXml(`${colLetter(i)}1`, h)))
+  rowsXml.push(`</row>`)
   rows.forEach((row, r) => {
     const rowNum = r + 2
-    parts.push(`<row r="${rowNum}">`)
-    headers.forEach((h, i) => parts.push(cellXml(`${colLetter(i)}${rowNum}`, row[h] ?? null)))
-    parts.push(`</row>`)
+    const tall = layout && layout.rowToImage.has(r) ? ` ht="72" customHeight="1"` : ''
+    rowsXml.push(`<row r="${rowNum}"${tall}>`)
+    headers.forEach((h, i) => rowsXml.push(cellXml(`${colLetter(i)}${rowNum}`, row[h] ?? null)))
+    rowsXml.push(`</row>`)
   })
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-    `<sheetData>${parts.join('')}</sheetData></worksheet>`
+
+  const rNs = layout ? ` xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"` : ''
+  const cols = layout
+    ? `<cols><col min="${layout.colIndex + 1}" max="${layout.colIndex + 1}" width="18" customWidth="1"/></cols>`
+    : ''
+  const drawing = layout ? `<drawing r:id="rId1"/>` : ''
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"${rNs}>` +
+    cols +
+    `<sheetData>${rowsXml.join('')}</sheetData>${drawing}</worksheet>`
+  )
+}
+
+function drawingXml(layout: ImageLayout): string {
+  const anchors: string[] = []
+  let n = 0
+  for (const [rowIdx, imgIdx] of layout.rowToImage) {
+    const picId = imgIdx + 2
+    const rId = imgIdx + 1
+    anchors.push(
+      `<xdr:oneCellAnchor>` +
+        `<xdr:from><xdr:col>${layout.colIndex}</xdr:col><xdr:colOff>19050</xdr:colOff>` +
+        `<xdr:row>${rowIdx + 1}</xdr:row><xdr:rowOff>19050</xdr:rowOff></xdr:from>` +
+        `<xdr:ext cx="${IMG_W * PX_TO_EMU}" cy="${IMG_H * PX_TO_EMU}"/>` +
+        `<xdr:pic>` +
+        `<xdr:nvPicPr><xdr:cNvPr id="${picId}" name="Photo ${picId}"/><xdr:cNvPicPr/></xdr:nvPicPr>` +
+        `<xdr:blipFill>` +
+        `<a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId${rId}"/>` +
+        `<a:stretch><a:fillRect/></a:stretch>` +
+        `</xdr:blipFill>` +
+        `<xdr:spPr>` +
+        `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${IMG_W * PX_TO_EMU}" cy="${IMG_H * PX_TO_EMU}"/></a:xfrm>` +
+        `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+        `</xdr:spPr>` +
+        `</xdr:pic>` +
+        `<xdr:clientData/>` +
+        `</xdr:oneCellAnchor>`,
+    )
+    n++
+  }
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ` +
+    `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${anchors.join('')}</xdr:wsDr>`
+  )
 }
 
 // --- minimal ZIP (store method) ---
@@ -117,21 +175,47 @@ function zip(files: { name: string; data: Uint8Array }[]): Uint8Array {
   return concat([...local, ...central, end])
 }
 
-export function xlsxBlob(headers: string[], rows: ExportRow[]): Blob {
+export function xlsxBlob(
+  headers: string[],
+  rows: ExportRow[],
+  opts?: { imageColumn?: string; images?: (XlsxImage | null)[] },
+): Blob {
   const enc = new TextEncoder()
-  const files = [
-    {
-      name: '[Content_Types].xml',
-      data: enc.encode(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-        `<Default Extension="xml" ContentType="application/xml"/>` +
-        `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
-        `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
-        `</Types>`,
-      ),
-    },
+
+  // Resolve which rows carry a photo, mapped to a compact media index.
+  let layout: ImageLayout | null = null
+  const media: { name: string; data: Uint8Array }[] = []
+  if (opts?.imageColumn && opts.images) {
+    const colIndex = headers.indexOf(opts.imageColumn)
+    if (colIndex >= 0) {
+      const rowToImage = new Map<number, number>()
+      opts.images.forEach((img, rowIdx) => {
+        if (!img) return
+        const imgIdx = media.length
+        media.push({ name: `xl/media/image${imgIdx + 1}.${img.ext}`, data: img.data })
+        rowToImage.set(rowIdx, imgIdx)
+      })
+      if (rowToImage.size > 0) layout = { colIndex, rowToImage }
+    }
+  }
+
+  const hasPng = media.some((m) => m.name.endsWith('.png'))
+  const hasJpeg = media.some((m) => m.name.endsWith('.jpeg'))
+
+  const contentTypes =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+    `<Default Extension="xml" ContentType="application/xml"/>` +
+    (hasPng ? `<Default Extension="png" ContentType="image/png"/>` : '') +
+    (hasJpeg ? `<Default Extension="jpeg" ContentType="image/jpeg"/>` : '') +
+    `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
+    `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+    (layout ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : '') +
+    `</Types>`
+
+  const files: { name: string; data: Uint8Array }[] = [
+    { name: '[Content_Types].xml', data: enc.encode(contentTypes) },
     {
       name: '_rels/.rels',
       data: enc.encode(
@@ -158,8 +242,36 @@ export function xlsxBlob(headers: string[], rows: ExportRow[]): Blob {
         `</Relationships>`,
       ),
     },
-    { name: 'xl/worksheets/sheet1.xml', data: enc.encode(sheetXml(headers, rows)) },
+    { name: 'xl/worksheets/sheet1.xml', data: enc.encode(sheetXml(headers, rows, layout)) },
   ]
+
+  if (layout) {
+    files.push({
+      name: 'xl/worksheets/_rels/sheet1.xml.rels',
+      data: enc.encode(
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>` +
+        `</Relationships>`,
+      ),
+    })
+    files.push({ name: 'xl/drawings/drawing1.xml', data: enc.encode(drawingXml(layout)) })
+    const rels = media
+      .map((m, i) => {
+        const target = m.name.replace('xl/', '../')
+        return `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${target}"/>`
+      })
+      .join('')
+    files.push({
+      name: 'xl/drawings/_rels/drawing1.xml.rels',
+      data: enc.encode(
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`,
+      ),
+    })
+    files.push(...media)
+  }
+
   return new Blob([zip(files) as unknown as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
