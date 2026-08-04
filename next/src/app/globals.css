@@ -212,6 +212,16 @@ a.rec:hover { border-color: var(--line-strong); box-shadow: var(--shadow); color
 .sub-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; border: 1px solid var(--line); }
 .sub-thumb-ph { width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--line); }
 
+/* ---------- Legal / prose pages ---------- */
+.legal { max-width: 760px; margin: 0 auto; padding: 36px 24px 80px; }
+.legal .back { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; margin-bottom: 18px; }
+.legal h1 { font-size: 30px; margin-bottom: 4px; }
+.legal .updated { color: var(--ink-3); font-size: 13px; margin-bottom: 26px; }
+.legal h2 { font-size: 19px; margin: 30px 0 8px; }
+.legal p, .legal li { color: var(--ink-2); line-height: 1.7; }
+.legal ul { padding-left: 20px; margin: 8px 0; }
+.legal li { margin-bottom: 6px; }
+
 /* ---------- Public landing page ---------- */
 .lp { min-height: 100vh; }
 .lp-header { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between;

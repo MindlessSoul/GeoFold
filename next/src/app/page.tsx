@@ -121,7 +121,11 @@ export default function LandingPage() {
       <footer className="lp-footer">
         <div className="brand" style={{ padding: 0, fontSize: 15 }}><span className="mark" style={{ width: 22, height: 22 }}><MapPin size={13} /></span>GeoFold</div>
         <span>© {new Date().getFullYear()} GeoFold · Field GPS surveys</span>
-        <Link href="/login">Sign in</Link>
+        <span style={{ display: 'flex', gap: 16 }}>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+          <Link href="/login">Sign in</Link>
+        </span>
       </footer>
     </div>
   )
