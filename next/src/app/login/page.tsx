@@ -4,17 +4,23 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MapPin } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/AuthContext'
 import { DEMO_MODE } from '@/lib/demo'
+import { OAuthButtons } from '@/components/OAuthButtons'
 
 type Mode = 'login' | 'signup' | 'forgot'
 
 const titles: Record<Mode, string> = {
-  login: 'Sign in',
+  login: 'Geofold Portal',
   signup: 'Create your account',
   forgot: 'Reset your password',
+}
+
+const subtitles: Record<Mode, string> = {
+  login: 'Sign in to access your survey dashboard.',
+  signup: 'Set up an account to start collecting survey points.',
+  forgot: "Enter your email and we'll send a reset link.",
 }
 
 export default function LoginPage() {
@@ -37,7 +43,9 @@ export default function LoginPage() {
     }
   }, [])
 
-  if (loading || session) return <div className="center">Loading…</div>
+  if (loading || session) {
+    return <div className="mk-login-shell"><div className="mk-login-body">Loading…</div></div>
+  }
 
   const switchMode = (m: Mode) => { setMode(m); setError(null); setNotice(null) }
 
@@ -78,53 +86,78 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-wrap graticule">
-      <div className="auth">
-        <Link href="/" className="brand" style={{ justifyContent: 'center' }}><span className="mark"><MapPin size={18} /></span>GeoFold</Link>
-        <div className="card">
-          <div className="card-title">{titles[mode]}</div>
-          {DEMO_MODE && (
-            <p className="hint" style={{ marginTop: 0, marginBottom: 4 }}>
-              Demo mode — enter anything to explore with sample data.
-            </p>
-          )}
-          {mode === 'forgot' && !DEMO_MODE && (
-            <p className="hint" style={{ marginTop: 0 }}>Enter your email and we&apos;ll send a reset link.</p>
-          )}
+    <div className="mk-login-shell">
+      <div className="mk-login-top">
+        <Link href="/" className="mk-wordmark">Geofold</Link>
+      </div>
+
+      <div className="mk-login-body">
+        <div className="mk-card">
+          <div className="mk-card-t">{titles[mode]}</div>
+          <div className="mk-card-sub">
+            {DEMO_MODE ? 'Demo mode — enter anything to explore with sample data.' : subtitles[mode]}
+          </div>
+
+          {error && <div className="mk-error">{error}</div>}
+          {notice && <div className="mk-note">{notice}</div>}
+
+          {/* Social sign-in isn't meaningful in demo mode, or on the reset-password step. */}
+          {!DEMO_MODE && mode !== 'forgot' && <OAuthButtons />}
+
           <form onSubmit={submit}>
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-            {mode !== 'forgot' && (
-              <>
-                <label>Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-              </>
-            )}
-            {mode === 'login' && !DEMO_MODE && (
-              <div style={{ textAlign: 'right', marginTop: 8 }}>
-                <a href="#" onClick={(e) => { e.preventDefault(); switchMode('forgot') }} style={{ fontSize: 13 }}>Forgot password?</a>
+            <div className="mk-card-fields">
+              <div>
+                <label className="mk-label" htmlFor="email">Email</label>
+                <input
+                  id="email"
+                  type="email"
+                  className="mk-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
               </div>
-            )}
-            {error && <p className="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</p>}
-            {notice && <p style={{ color: 'var(--spruce-ink)', fontSize: 14, marginTop: 12, marginBottom: 0 }}>{notice}</p>}
-            <button type="submit" disabled={busy} style={{ width: '100%', marginTop: 16 }}>
+              {mode !== 'forgot' && (
+                <div>
+                  <label className="mk-label" htmlFor="password">Password</label>
+                  <input
+                    id="password"
+                    type="password"
+                    className="mk-input"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  />
+                </div>
+              )}
+            </div>
+
+            <button type="submit" className="mk-submit" disabled={busy}>
               {busy ? 'Working…' : mode === 'login' ? 'Sign in' : mode === 'signup' ? 'Sign up' : 'Send reset link'}
             </button>
           </form>
+
+          <div className="mk-card-foot">
+            {mode === 'forgot' ? (
+              <a href="#" onClick={(e) => { e.preventDefault(); switchMode('login') }}>Back to sign in</a>
+            ) : (
+              <>
+                {mode === 'login' && !DEMO_MODE && (
+                  <>
+                    <a href="#" onClick={(e) => { e.preventDefault(); switchMode('forgot') }}>Forgot password?</a>
+                    {' · '}
+                  </>
+                )}
+                <a href="#" onClick={(e) => { e.preventDefault(); switchMode(mode === 'login' ? 'signup' : 'login') }}>
+                  {mode === 'login' ? 'Need access?' : 'Already have an account?'}
+                </a>
+              </>
+            )}
+          </div>
         </div>
-        <p className="muted" style={{ textAlign: 'center', fontSize: 14 }}>
-          {mode === 'forgot' ? (
-            <a href="#" onClick={(e) => { e.preventDefault(); switchMode('login') }}>Back to sign in</a>
-          ) : (
-            <>
-              {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-              <a href="#" onClick={(e) => { e.preventDefault(); switchMode(mode === 'login' ? 'signup' : 'login') }}>
-                {mode === 'login' ? 'Sign up' : 'Sign in'}
-              </a>
-            </>
-          )}
-        </p>
       </div>
     </div>
   )

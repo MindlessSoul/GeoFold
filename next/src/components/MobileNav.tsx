@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { CreditCard, LogOut, MapPin } from 'lucide-react'
+import { CreditCard, LogOut } from 'lucide-react'
 import { useSync } from '@/lib/SyncContext'
 import { useAuth } from '@/lib/AuthContext'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -26,8 +26,8 @@ export function MobileNav() {
   return (
     <>
       <header className="mobile-top">
-        <div className="brand" style={{ padding: 0, fontSize: 16 }}>
-          <span className="mark" style={{ width: 24, height: 24 }}><MapPin size={14} /></span>GeoFold
+        <div className="brand" style={{ padding: 0, height: 'auto', border: 0, fontSize: 17 }}>
+          <span className="mark" style={{ width: 24, height: 24 }}>G</span>GeoFold
         </div>
         <div className="actions">
           <Link href="/subscription" aria-label="Subscription" className={`theme-toggle${pathname.startsWith('/subscription') ? ' active' : ''}`} style={{ display: 'grid', placeItems: 'center' }}><CreditCard size={16} /></Link>

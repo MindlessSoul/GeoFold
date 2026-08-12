@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MapPin } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { DEMO_MODE } from '@/lib/demo'
 
@@ -49,35 +48,74 @@ export default function ResetPage() {
     }
   }
 
+  // The link only becomes a session once the recovery tokens are exchanged; until then, an expired
+  // or already-used link leaves no session and the form would be pointless.
+  const invalid = ready && !DEMO_MODE && !hasSession
+
   return (
-    <div className="auth-wrap graticule">
-      <div className="auth">
-        <Link href="/" className="brand" style={{ justifyContent: 'center' }}><span className="mark"><MapPin size={18} /></span>GeoFold</Link>
-        <div className="card">
-          <div className="card-title">Choose a new password</div>
-          {done ? (
-            <p style={{ color: 'var(--spruce-ink)', fontSize: 14, margin: 0 }}>Password updated — signing you in…</p>
-          ) : ready && !DEMO_MODE && !hasSession ? (
-            <>
-              <p className="hint" style={{ marginTop: 0 }}>This reset link is invalid or has expired. Request a new one from the sign-in screen.</p>
-              <Link href="/login" className="lp-btn ghost" style={{ marginTop: 6 }}>Back to sign in</Link>
-            </>
+    <div className="mk-login-shell">
+      <div className="mk-login-top">
+        <Link href="/" className="mk-wordmark">Geofold</Link>
+      </div>
+
+      <div className="mk-login-body">
+        <div className="mk-card">
+          <div className="mk-card-t">Choose a new password</div>
+          <div className="mk-card-sub">
+            {done
+              ? 'Password updated — signing you in…'
+              : invalid
+                ? 'This reset link is invalid or has expired.'
+                : 'Enter a new password for your GeoFold account.'}
+          </div>
+
+          {error && <div className="mk-error">{error}</div>}
+
+          {!done && (invalid ? (
+            <div className="mk-card-foot" style={{ marginTop: 4 }}>
+              <Link href="/login">Request a new reset link</Link>
+            </div>
           ) : (
             <form onSubmit={submit}>
-              <label>New password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
-              <label>Confirm password</label>
-              <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} autoComplete="new-password" />
-              {error && <p className="error" style={{ marginTop: 12, marginBottom: 0 }}>{error}</p>}
-              <button type="submit" disabled={busy || !ready} style={{ width: '100%', marginTop: 16 }}>
+              <div className="mk-card-fields">
+                <div>
+                  <label className="mk-label" htmlFor="password">New password</label>
+                  <input
+                    id="password"
+                    type="password"
+                    className="mk-input"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="mk-label" htmlFor="confirm">Confirm password</label>
+                  <input
+                    id="confirm"
+                    type="password"
+                    className="mk-input"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    required
+                    minLength={6}
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="mk-submit" disabled={busy || !ready}>
                 {busy ? 'Working…' : 'Update password'}
               </button>
             </form>
-          )}
+          ))}
+
+          <div className="mk-card-foot">
+            <Link href="/login">Back to sign in</Link>
+          </div>
         </div>
-        <p className="muted" style={{ textAlign: 'center', fontSize: 14 }}>
-          <Link href="/login">Back to sign in</Link>
-        </p>
       </div>
     </div>
   )

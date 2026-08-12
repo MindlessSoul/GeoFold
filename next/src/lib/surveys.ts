@@ -1,6 +1,6 @@
 import sql from './db'
 import { parseSchema, validateFormData } from './validation'
-import { checkSurveyCreation } from './quota'
+import { checkSurveyCreation, recordSurveyCreated } from './quota'
 import { ensureProfile } from './profile'
 
 export interface UpsertSurveyInput {
@@ -86,5 +86,7 @@ export async function upsertSurvey(userId: string, input: UpsertSurveyInput): Pr
     VALUES (${input.id}, ${input.projectId}, ${userId},
       ST_SetSRID(ST_MakePoint(${input.longitude}, ${input.latitude}), 4326)::geography,
       ${input.accuracyMeters}, ${input.capturedAtUtc}, now(), ${input.detailsJson}::jsonb, 'submitted')`
+  // Count this against today's cap (create only — the update path above is not charged again).
+  await recordSurveyCreated(userId)
   return { status: 'created', survey: (await surveyResponse(input.id))! }
 }

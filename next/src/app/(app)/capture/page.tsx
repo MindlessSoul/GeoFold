@@ -30,6 +30,10 @@ export default function CapturePage() {
   const [pos, setPos] = useState<GeolocationPosition | null>(null)
   const [gpsBusy, setGpsBusy] = useState(false)
   const [gpsError, setGpsError] = useState<string | null>(null)
+  // Desktop browsers often have no usable GPS, so the dashboard allows typing coordinates.
+  const [manual, setManual] = useState(false)
+  const [manualLat, setManualLat] = useState('')
+  const [manualLng, setManualLng] = useState('')
   const [values, setValues] = useState<Record<string, string | boolean>>({})
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -79,23 +83,40 @@ export default function CapturePage() {
     if (f && !pos) captureGps()
   }
 
-  const canSave = projectId && file && pos && !saving
+  // A typed coordinate has no measured precision, so accuracy stays null rather than
+  // claiming 0 m — the column is nullable and the UI reads it back as "manual entry".
+  const manualFix = useMemo(() => {
+    if (!manual) return null
+    const lat = Number(manualLat.trim())
+    const lng = Number(manualLng.trim())
+    const ok =
+      manualLat.trim() !== '' && manualLng.trim() !== '' &&
+      Number.isFinite(lat) && Number.isFinite(lng) &&
+      lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+    return ok ? { lat, lng } : null
+  }, [manual, manualLat, manualLng])
+
+  const manualInvalid = manual && (manualLat.trim() !== '' || manualLng.trim() !== '') && !manualFix
+  const fix = manual ? manualFix : pos ? { lat: pos.coords.latitude, lng: pos.coords.longitude } : null
+  const accuracy = manual ? null : pos ? pos.coords.accuracy : null
+
+  const canSave = Boolean(projectId && file && fix && !saving)
 
   const save = async () => {
-    if (!file || !pos) return
+    if (!file || !fix) return
     setError(null)
     setSaving(true)
     try {
       const capturedAtUtc = new Date().toISOString()
-      const lat = pos.coords.latitude
-      const lng = pos.coords.longitude
+      const lat = fix.lat
+      const lng = fix.lng
       const stamped = await watermarkPhoto(file, [`${lat.toFixed(6)}, ${lng.toFixed(6)}`, new Date(capturedAtUtc).toLocaleString()])
       const details = buildDetails(fields, values)
       if (note.trim()) details.catatan = note.trim()
       await addItem({
         id: crypto.randomUUID(), projectId,
         projectName: projects?.find((p) => p.id === projectId)?.name ?? '',
-        latitude: lat, longitude: lng, accuracyMeters: pos.coords.accuracy, capturedAtUtc,
+        latitude: lat, longitude: lng, accuracyMeters: accuracy, capturedAtUtc,
         detailsJson: JSON.stringify(details), photo: stamped,
         photoId: crypto.randomUUID(), status: 'pending', createdAt: Date.now(),
       })
@@ -109,7 +130,10 @@ export default function CapturePage() {
     }
   }
 
-  const reset = () => { setFile(null); setPreviewUrl(null); setValues({}); setNote(''); setDone(false); setError(null); setPos(null) }
+  const reset = () => {
+    setFile(null); setPreviewUrl(null); setValues({}); setNote(''); setDone(false); setError(null)
+    setPos(null); setManualLat(''); setManualLng('')
+  }
 
   if (done) {
     return (
@@ -153,17 +177,56 @@ export default function CapturePage() {
         </label>
         <input id="photo" type="file" accept="image/*" capture="environment" onChange={onPickPhoto} style={{ display: 'none' }} />
 
-        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <MapPin size={18} style={{ color: 'var(--spruce)' }} />
-          <div style={{ flex: 1 }}>
-            {pos ? <span className="coord">◎ {pos.coords.latitude.toFixed(6)}, {pos.coords.longitude.toFixed(6)} ±{Math.round(pos.coords.accuracy)}m</span>
-              : gpsError ? <span className="error" style={{ background: 'none', border: 'none', padding: 0 }}>{gpsError}</span>
-              : <span className="hint">Location not captured yet</span>}
-          </div>
-          <button type="button" className="ghost" onClick={captureGps} disabled={gpsBusy} style={{ padding: '7px 12px' }}>
-            <RefreshCw size={15} style={{ verticalAlign: -3, marginRight: 5 }} /> {gpsBusy ? 'Locating…' : pos ? 'Update' : 'Get GPS'}
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <label style={{ margin: 0 }}>Location</label>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => { setManual((m) => !m); setGpsError(null) }}
+            style={{ padding: '5px 10px', fontSize: 12 }}
+          >
+            {manual ? 'Use GPS instead' : 'Enter manually'}
           </button>
         </div>
+
+        {manual ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ marginTop: 4 }}>Latitude</label>
+                <input inputMode="decimal" placeholder="-0.037622" value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ marginTop: 4 }}>Longitude</label>
+                <input inputMode="decimal" placeholder="111.283981" value={manualLng} onChange={(e) => setManualLng(e.target.value)} />
+              </div>
+            </div>
+            {manualInvalid ? (
+              <p className="error" style={{ marginTop: 10 }}>
+                Enter decimal degrees — latitude between -90 and 90, longitude between -180 and 180.
+              </p>
+            ) : manualFix ? (
+              <p className="hint" style={{ marginTop: 8 }}>
+                <span className="coord">◎ {manualFix.lat.toFixed(6)}, {manualFix.lng.toFixed(6)}</span>
+                <span style={{ marginLeft: 8 }}>entered manually — no accuracy recorded</span>
+              </p>
+            ) : (
+              <p className="hint" style={{ marginTop: 8 }}>Decimal degrees, e.g. -0.037622 / 111.283981.</p>
+            )}
+          </>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <MapPin size={18} style={{ color: 'var(--accent)' }} />
+            <div style={{ flex: 1 }}>
+              {pos ? <span className="coord">◎ {pos.coords.latitude.toFixed(6)}, {pos.coords.longitude.toFixed(6)} ±{Math.round(pos.coords.accuracy)}m</span>
+                : gpsError ? <span className="error" style={{ background: 'none', border: 'none', padding: 0 }}>{gpsError}</span>
+                : <span className="hint">Location not captured yet</span>}
+            </div>
+            <button type="button" className="ghost" onClick={captureGps} disabled={gpsBusy} style={{ padding: '7px 12px' }}>
+              <RefreshCw size={15} style={{ verticalAlign: -3, marginRight: 5 }} /> {gpsBusy ? 'Locating…' : pos ? 'Update' : 'Get GPS'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -189,7 +252,11 @@ export default function CapturePage() {
       <button onClick={save} disabled={!canSave} style={{ width: '100%', padding: 13 }}>
         {saving ? <><span className="spinner" style={{ marginRight: 8 }} /> Saving…</> : 'Save survey'}
       </button>
-      {!pos && file && <p className="hint" style={{ textAlign: 'center', marginTop: 8 }}>Waiting for location…</p>}
+      {!fix && file && (
+        <p className="hint" style={{ textAlign: 'center', marginTop: 8 }}>
+          {manual ? 'Enter a latitude and longitude to save.' : 'Waiting for location…'}
+        </p>
+      )}
     </div>
   )
 }

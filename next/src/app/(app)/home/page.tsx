@@ -68,13 +68,13 @@ export default function HomePage() {
         </div>
         <div className="stat">
           <span className="accent" style={{ background: 'var(--ochre)' }} />
-          <div className="lbl"><span className="sdot" style={{ background: 'var(--ochre)' }} />Surveys this month</div>
-          <div className="val">{me?.usage.surveysThisMonth ?? '—'}</div>
+          <div className="lbl"><span className="sdot" style={{ background: 'var(--ochre)' }} />Surveys today</div>
+          <div className="val">{me?.usage.surveysToday ?? '—'}</div>
         </div>
         <div className="stat">
           <span className="accent" style={{ background: 'var(--sky)' }} />
-          <div className="lbl"><span className="sdot" style={{ background: 'var(--sky)' }} />Storage</div>
-          <div className="val">{me ? me.usage.storageMb : '—'}<small> MB</small></div>
+          <div className="lbl"><span className="sdot" style={{ background: 'var(--sky)' }} />Photos today</div>
+          <div className="val">{me?.usage.photosToday ?? '—'}</div>
         </div>
       </div>
 

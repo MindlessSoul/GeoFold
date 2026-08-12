@@ -17,9 +17,9 @@ const projects: ProjectResponse[] = [
 ]
 
 const me: SubscriptionMe = {
-  plan: 'premium', status: 'active', isActive: true, currentPeriodEndUtc: '2026-08-16T00:00:00Z',
-  limits: { maxProjects: null, maxSurveysPerMonth: null, storageQuotaMb: 51200 },
-  usage: { projects: 2, surveysThisMonth: 4, storageMb: 18.4 },
+  workspaceType: 'free', premiumActive: false, premiumUntilUtc: null, frozen: false,
+  limits: { maxProjects: 3, photosPerProject: 20, dailySurveys: 30, dailyPhotos: 60 },
+  usage: { projects: 2, surveysToday: 4, photosToday: 7 },
 }
 
 const demoPhoto =
@@ -54,6 +54,9 @@ export function demoResponse<T>(path: string, options: RequestInit): T {
   if (clean === '/api/surveys' && method === 'GET') return geojson.features.map((f) => surveyDetail(f.properties.id)) as T
   const sm = clean.match(/^\/api\/surveys\/([^/]+)$/)
   if (sm && method === 'GET') return surveyDetail(sm[1]) as T
+  // Repositioning a point: demo data is static, so echo the detail back. The map keeps the new
+  // location optimistically in client state, which is what a real save would confirm.
+  if (sm && method === 'PATCH') return surveyDetail(sm[1]) as T
   if (clean === '/api/surveys' && method === 'POST') return surveyDetail('s1') as T
   if (clean.endsWith('/initiate')) return { photoId: 'demo-p', uploadUrl: 'demo', storagePath: 'demo' } as T
   if (clean.endsWith('/url')) return { url: demoPhoto } as T
