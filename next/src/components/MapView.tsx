@@ -1,12 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import { useMemo, useState, type CSSProperties } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, Tooltip, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { api } from '@/lib/api-client'
 import type { SurveyDetail, SurveyFeatureCollection, SurveyProperties } from '@/lib/types'
 
 const SPRUCE = '#2c4a3b'
+const MEASURE = '#c0562f'
+
+type Feature = SurveyFeatureCollection['features'][number]
 
 function parseDetails(json: string | null): [string, string][] {
   if (!json) return []
@@ -17,12 +21,37 @@ function parseDetails(json: string | null): [string, string][] {
   return []
 }
 
-function SurveyMarker({ feature }: { feature: SurveyFeatureCollection['features'][number] }) {
+// A plain HTML dot as the marker icon. A divIcon sidesteps Leaflet's default image-based marker
+// (which breaks under bundlers) while keeping the design's spruce dot — and, unlike CircleMarker,
+// a Marker can be dragged.
+const dotIcon = L.divIcon({
+  className: 'survey-dot',
+  html: `<span style="display:block;width:14px;height:14px;border-radius:50%;background:${SPRUCE};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.35)"></span>`,
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+})
+
+function fmtDistance(meters: number): string {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(2)} km` : `${Math.round(meters)} m`
+}
+
+function SurveyMarker({
+  feature,
+  draggable,
+  onMove,
+}: {
+  feature: Feature
+  draggable: boolean
+  onMove: (id: string, lat: number, lng: number) => void
+}) {
   const props: SurveyProperties = feature.properties
   const [lng, lat] = feature.geometry.coordinates
   const details = parseDetails(props.detailsJson)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'none'>('idle')
+  const [editLat, setEditLat] = useState('')
+  const [editLng, setEditLng] = useState('')
+  const [editing, setEditing] = useState(false)
 
   const loadPhoto = async () => {
     if (state !== 'idle') return
@@ -38,8 +67,37 @@ function SurveyMarker({ feature }: { feature: SurveyFeatureCollection['features'
     } catch { setState('error') }
   }
 
+  const beginEdit = () => {
+    setEditLat(lat.toFixed(6))
+    setEditLng(lng.toFixed(6))
+    setEditing(true)
+  }
+
+  const parsedEdit = useMemo(() => {
+    const a = Number(editLat.trim())
+    const o = Number(editLng.trim())
+    const ok =
+      editLat.trim() !== '' && editLng.trim() !== '' &&
+      Number.isFinite(a) && Number.isFinite(o) &&
+      a >= -90 && a <= 90 && o >= -180 && o <= 180
+    return ok ? { lat: a, lng: o } : null
+  }, [editLat, editLng])
+
   return (
-    <CircleMarker center={[lat, lng]} radius={7} pathOptions={{ color: SPRUCE, fillColor: SPRUCE, fillOpacity: 0.9, weight: 2 }} eventHandlers={{ popupopen: loadPhoto }}>
+    <Marker
+      position={[lat, lng]}
+      icon={dotIcon}
+      draggable={draggable}
+      // Popups (and stray drags) get in the way while measuring; hand clicks to the map instead.
+      interactive={draggable}
+      eventHandlers={{
+        popupopen: loadPhoto,
+        dragend: (e) => {
+          const p = (e.target as L.Marker).getLatLng()
+          onMove(props.id, p.lat, p.lng)
+        },
+      }}
+    >
       <Popup maxWidth={260}>
         <div style={{ minWidth: 200 }}>
           {photoUrl ? (
@@ -57,20 +115,181 @@ function SurveyMarker({ feature }: { feature: SurveyFeatureCollection['features'
               <tbody>{details.map(([k, v]) => <tr key={k}><td style={{ color: '#666', paddingRight: 8, verticalAlign: 'top' }}>{k}</td><td>{v}</td></tr>)}</tbody>
             </table>
           )}
+
+          {editing ? (
+            <div style={{ marginTop: 8, borderTop: '1px solid #ddd', paddingTop: 8 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input inputMode="decimal" value={editLat} onChange={(e) => setEditLat(e.target.value)} placeholder="lat"
+                  style={{ width: '50%', fontSize: 12, padding: '4px 6px', fontFamily: 'monospace' }} />
+                <input inputMode="decimal" value={editLng} onChange={(e) => setEditLng(e.target.value)} placeholder="lng"
+                  style={{ width: '50%', fontSize: 12, padding: '4px 6px', fontFamily: 'monospace' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <button
+                  type="button"
+                  disabled={!parsedEdit}
+                  onClick={() => { if (parsedEdit) { onMove(props.id, parsedEdit.lat, parsedEdit.lng); setEditing(false) } }}
+                  style={{ flex: 1, fontSize: 12, padding: '5px 8px', background: SPRUCE, color: '#fff', border: 0, cursor: parsedEdit ? 'pointer' : 'not-allowed', opacity: parsedEdit ? 1 : 0.5 }}
+                >Save</button>
+                <button type="button" onClick={() => setEditing(false)}
+                  style={{ fontSize: 12, padding: '5px 8px', background: '#eee', border: 0, cursor: 'pointer' }}>Cancel</button>
+              </div>
+              {!parsedEdit && (editLat || editLng) && (
+                <div style={{ fontSize: 11, color: '#c0562f', marginTop: 4 }}>lat -90..90, lng -180..180</div>
+              )}
+            </div>
+          ) : (
+            <button type="button" onClick={beginEdit}
+              style={{ marginTop: 8, fontSize: 12, padding: '5px 8px', background: 'transparent', border: '1px solid #ccc', cursor: 'pointer' }}>
+              Edit coordinates
+            </button>
+          )}
+          <div style={{ fontSize: 11, color: '#999', marginTop: 6 }}>Tip: drag the pin to move it.</div>
         </div>
       </Popup>
-    </CircleMarker>
+    </Marker>
   )
 }
 
-export default function MapView({ features, height = '72vh' }: { features: SurveyFeatureCollection['features']; height?: string }) {
+// Click to drop points; the running total is shown in the panel. Uses Leaflet's great-circle
+// distanceTo so the reading is true ground distance, not pixels.
+function MeasureLayer({ points, setPoints }: { points: L.LatLng[]; setPoints: (p: L.LatLng[]) => void }) {
+  useMapEvents({
+    click: (e) => setPoints([...points, e.latlng]),
+  })
+
+  if (points.length === 0) return null
+
+  let cumulative = 0
+  const labels = points.map((p, i) => {
+    if (i > 0) cumulative += points[i - 1].distanceTo(p)
+    return { p, cumulative }
+  })
+
+  return (
+    <>
+      <Polyline positions={points} pathOptions={{ color: MEASURE, weight: 3, dashArray: '6 8' }} />
+      {labels.map(({ p, cumulative: c }, i) => (
+        <CircleMarker key={i} center={p} radius={4} pathOptions={{ color: MEASURE, fillColor: '#fff', fillOpacity: 1, weight: 2 }}>
+          {i > 0 && (
+            <Tooltip permanent direction="top" offset={[0, -6]}>
+              <span style={{ fontSize: 11 }}>{fmtDistance(c)}</span>
+            </Tooltip>
+          )}
+        </CircleMarker>
+      ))}
+    </>
+  )
+}
+
+// Esri World Imagery: global satellite with no API key and no billing account, which is the
+// same reason the mobile map avoids the Google SDK. Note the {z}/{y}/{x} order — Esri differs
+// from the OSM {z}/{x}/{y} convention, and swapping them silently yields blank tiles.
+const BASEMAPS = {
+  satellite: {
+    label: 'Satellite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+  },
+  street: {
+    label: 'Street',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+  },
+} as const
+
+// Satellite imagery carries no place names; this transparent overlay puts them back, which
+// matters when you are trying to locate a point against a village or road by eye.
+const LABELS_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
+
+type BasemapKey = keyof typeof BASEMAPS
+
+const btnStyle = (active: boolean): CSSProperties => ({
+  padding: '5px 11px',
+  fontSize: 12,
+  border: 0,
+  cursor: 'pointer',
+  background: active ? 'var(--accent)' : 'var(--paper)',
+  color: active ? '#f2f2f3' : 'var(--ink)',
+})
+
+export default function MapView({ features: initial, height = '72vh' }: { features: Feature[]; height?: string }) {
+  const [basemap, setBasemap] = useState<BasemapKey>('satellite')
+  const [features, setFeatures] = useState<Feature[]>(initial)
+  const [measuring, setMeasuring] = useState(false)
+  const [points, setPoints] = useState<L.LatLng[]>([])
+  const [note, setNote] = useState<string | null>(null)
+
   const first = features[0]
   const center: [number, number] = first ? [first.geometry.coordinates[1], first.geometry.coordinates[0]] : [-2.5, 118]
+  const active = BASEMAPS[basemap]
+
+  const totalMeters = useMemo(() => {
+    let t = 0
+    for (let i = 1; i < points.length; i++) t += points[i - 1].distanceTo(points[i])
+    return t
+  }, [points])
+
+  // Move a point: update the map immediately, then persist. If the save fails, snap it back so the
+  // map never shows a location the server didn't accept.
+  const onMove = async (id: string, lat: number, lng: number) => {
+    const prev = features
+    setFeatures((fs) => fs.map((f) => (f.properties.id === id
+      ? { ...f, geometry: { ...f.geometry, coordinates: [lng, lat] as [number, number] } }
+      : f)))
+    setNote(null)
+    try {
+      await api(`/api/surveys/${id}`, { method: 'PATCH', body: JSON.stringify({ latitude: lat, longitude: lng }) })
+      setNote('Location updated.')
+    } catch (e) {
+      setFeatures(prev)
+      setNote(e instanceof Error ? e.message : 'Could not move the point.')
+    }
+  }
+
+  const toggleMeasure = () => {
+    setMeasuring((m) => !m)
+    setPoints([])
+  }
+
   return (
-    <div style={{ height, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)' }}>
-      <MapContainer center={center} zoom={first ? 12 : 5} style={{ height: '100%', width: '100%' }}>
-        <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {features.map((f) => <SurveyMarker key={f.properties.id} feature={f} />)}
+    <div style={{ height, overflow: 'hidden', border: '1px solid var(--line)', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 400, display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', border: '1px solid var(--line)' }}>
+          {(Object.keys(BASEMAPS) as BasemapKey[]).map((key) => (
+            <button key={key} type="button" onClick={() => setBasemap(key)} aria-pressed={basemap === key} style={btnStyle(basemap === key)}>
+              {BASEMAPS[key].label}
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={toggleMeasure} aria-pressed={measuring} style={{ ...btnStyle(measuring), border: '1px solid var(--line)' }}>
+          {measuring ? 'Done' : 'Measure'}
+        </button>
+      </div>
+
+      {measuring && (
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 400, background: 'var(--paper)', border: '1px solid var(--line)', padding: '8px 12px', fontSize: 12, maxWidth: 220 }}>
+          <div style={{ fontWeight: 600 }}>Distance: {fmtDistance(totalMeters)}</div>
+          <div style={{ color: 'var(--ink-2, #666)', marginTop: 2 }}>
+            {points.length === 0 ? 'Click the map to start measuring.' : `${points.length} point${points.length > 1 ? 's' : ''}`}
+          </div>
+          {points.length > 0 && (
+            <button type="button" onClick={() => setPoints([])} style={{ marginTop: 6, fontSize: 12, padding: '4px 8px', border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer' }}>Clear</button>
+          )}
+        </div>
+      )}
+
+      {note && !measuring && (
+        <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 400, background: 'var(--paper)', border: '1px solid var(--line)', padding: '6px 10px', fontSize: 12 }}>{note}</div>
+      )}
+
+      <MapContainer center={center} zoom={first ? 12 : 5} style={{ height: '100%', width: '100%', cursor: measuring ? 'crosshair' : '' }}>
+        {/* keyed so switching swaps the layer instead of mutating the existing one */}
+        <TileLayer key={basemap} attribution={active.attribution} url={active.url} maxZoom={19} />
+        {basemap === 'satellite' && <TileLayer key="labels" url={LABELS_URL} maxZoom={19} />}
+        {features.map((f) => <SurveyMarker key={f.properties.id} feature={f} draggable={!measuring} onMove={onMove} />)}
+        {measuring && <MeasureLayer points={points} setPoints={setPoints} />}
       </MapContainer>
     </div>
   )

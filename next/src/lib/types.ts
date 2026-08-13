@@ -8,19 +8,18 @@ export interface ProjectResponse {
   surveyCount: number
 }
 
-export interface QuotaLimits {
-  maxProjects: number | null
-  maxSurveysPerMonth: number | null
-  storageQuotaMb: number | null
-}
-
 export interface SubscriptionMe {
-  plan: string
-  status: string
-  isActive: boolean
-  currentPeriodEndUtc: string | null
-  limits: QuotaLimits
-  usage: { projects: number; surveysThisMonth: number; storageMb: number }
+  workspaceType: 'free' | 'premium'
+  premiumActive: boolean
+  premiumUntilUtc: string | null
+  frozen: boolean
+  limits: {
+    maxProjects: number | null
+    photosPerProject: number | null
+    dailySurveys: number | null
+    dailyPhotos: number | null
+  }
+  usage: { projects: number; surveysToday: number; photosToday: number }
 }
 
 export interface FormField {

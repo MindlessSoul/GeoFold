@@ -1,12 +1,32 @@
 import type { Metadata } from 'next'
-import { Archivo, Space_Mono } from 'next/font/google'
+import { headers } from 'next/headers'
+import { Archivo, Barlow, Barlow_Condensed, Space_Mono } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 
+// The CSP in src/proxy.ts is nonce-based, and a nonce only exists per request — so every
+// route must render dynamically. Static prerendering would bake in scripts with no nonce
+// and the browser would then refuse to run them. Drop this only if the CSP drops the nonce.
+export const dynamic = 'force-dynamic'
+
+// Archivo stays for the marketing pages' headings; the app chrome runs on
+// Barlow / Barlow Condensed, per the imported "Industry" design system.
 const archivo = Archivo({
   variable: '--font-sans',
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
+})
+
+const barlow = Barlow({
+  variable: '--font-body',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+})
+
+const barlowCondensed = Barlow_Condensed({
+  variable: '--font-cond',
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
 })
 
 const spaceMono = Space_Mono({
@@ -28,11 +48,20 @@ export const metadata: Metadata = {
 // Set the initial theme before paint to avoid a flash: honour a saved choice, else the OS setting.
 const themeScript = `(function(){try{var t=localStorage.getItem('geofold-theme');if(!t){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}})()`
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Matches the 'nonce-…' in the CSP the proxy set for this request.
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
   return (
-    <html lang="en" className={`${archivo.variable} ${spaceMono.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${archivo.variable} ${barlow.variable} ${barlowCondensed.variable} ${spaceMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* suppressHydrationWarning: browsers blank out the nonce attribute in the DOM once
+            the CSP has been applied, so the client always sees "" where the server sent a value. */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         <Providers>{children}</Providers>

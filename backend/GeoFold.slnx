@@ -1,8 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/GeoFold.Api/GeoFold.Api.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/GeoFold.Api.Tests/GeoFold.Api.Tests.csproj" />
-  </Folder>
-</Solution>

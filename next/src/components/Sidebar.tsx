@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LogOut, MapPin } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useSync } from '@/lib/SyncContext'
 import { useAuth } from '@/lib/AuthContext'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -24,7 +24,7 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="brand"><span className="mark"><MapPin size={16} /></span>GeoFold</div>
+      <div className="brand"><span className="mark">G</span>GeoFold</div>
       <nav className="side-nav">
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={pathname.startsWith(href) ? 'active' : ''}>

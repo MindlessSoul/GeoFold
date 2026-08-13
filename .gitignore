@@ -1,26 +1,29 @@
-# Build results
-[Bb]in/
-[Oo]bj/
-[Oo]ut/
-artifacts/
+# Root ignore rules. `next/` and `mobile/` each carry their own .gitignore
+# for framework-specific output; keep this file to cross-cutting concerns.
 
-# .NET / MSBuild
-project.lock.json
-*.user
-*.userosscache
-*.suo
-*.userprefs
-*.binlog
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+web-build/
+*.tsbuildinfo
+
+# Expo / native build caches
+.expo/
+.gradle/
+.kotlin/
+.cxx/
+local.properties
 
 # Test / coverage
-[Tt]est[Rr]esult*/
-coverage*.json
-coverage*.xml
-*.coverage
+coverage/
 
 # IDEs
 .vs/
-.vscode/
 .idea/
 *.swp
 *~
@@ -29,14 +32,18 @@ coverage*.xml
 .DS_Store
 Thumbs.db
 
-# Secrets & local-only config (keep committed appsettings.json as a template only)
-*.env
+# Env & secrets — .env.example stays committed as the template
 .env
-appsettings.*.Local.json
+.env.*
+*.env
+!.env.example
 secrets.json
-deploy/cloudrun.env.yaml
+# Zipped env/secret bundles — never commit these
+*.zip
 
-# Claude local (personal) settings — keep shared .claude/settings.json if added later
+# Claude local (personal) settings — shared .claude/settings.json stays committed
 .claude/settings.local.json
+
+# Local scratch scripts
 next/_seed.mjs
 next/_test.mjs

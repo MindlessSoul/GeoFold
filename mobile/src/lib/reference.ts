@@ -1,0 +1,38 @@
+import type { SurveyDetail } from './types';
+
+// A short, readable code per survey — "KAMPUNG-DURIAN-001" — numbered by capture order within a
+// project. Shown in Records instead of the UUID. Port of `next/src/lib/reference.ts`, and it must
+// stay in step with it: the same survey has to carry the same reference on phone and on desktop.
+
+export function slugifyProject(name: string): string {
+  const slug = name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24);
+  return slug || 'PROJECT';
+}
+
+export function buildReferences(
+  surveys: SurveyDetail[],
+  projectName: (id: string) => string,
+): Map<string, string> {
+  const byProject = new Map<string, SurveyDetail[]>();
+  for (const survey of surveys) {
+    const bucket = byProject.get(survey.projectId) ?? [];
+    bucket.push(survey);
+    byProject.set(survey.projectId, bucket);
+  }
+
+  const references = new Map<string, string>();
+  for (const [projectId, bucket] of byProject) {
+    const slug = slugifyProject(projectName(projectId));
+    [...bucket]
+      .sort((a, b) => a.capturedAtUtc.localeCompare(b.capturedAtUtc))
+      .forEach((survey, index) =>
+        references.set(survey.id, `${slug}-${String(index + 1).padStart(3, '0')}`),
+      );
+  }
+
+  return references;
+}
