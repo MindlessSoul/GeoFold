@@ -7,10 +7,11 @@ import { supabase } from './supabase';
 // Web only: closes the popup once it lands back on the redirect page. No-op on native.
 WebBrowser.maybeCompleteAuthSession();
 
-// Only Google for now — Facebook and Apple are left unconfigured, so listing them would render
-// buttons that error on tap. Add them back here once each is enabled in Supabase → Providers.
+// Google + Facebook. Apple is left out for now (paid Apple Developer account); add it back here
+// once it's enabled in Supabase → Providers, otherwise its button would error on tap.
 export const OAUTH_PROVIDERS: readonly { id: Provider; label: string }[] = [
   { id: 'google', label: 'Google' },
+  { id: 'facebook', label: 'Facebook' },
 ];
 
 /** Pull params from both the query string and the URL fragment. */
