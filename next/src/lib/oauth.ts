@@ -2,18 +2,28 @@ import type { Provider } from '@supabase/supabase-js'
 import { createSupabaseBrowserClient } from './supabase/client'
 
 /**
- * Social sign-in providers offered on the web login screen.
+ * Social sign-in providers known to the app. A button only appears once its id is listed in
+ * NEXT_PUBLIC_OAUTH_PROVIDERS — so you only show what you've actually enabled in the Supabase
+ * dashboard (Authentication → Providers), and users never hit a button that errors.
  *
- * Each one must ALSO be enabled in the Supabase dashboard
- * (Authentication → Providers) with its client id/secret, and the provider's own console
- * must list `https://<project-ref>.supabase.co/auth/v1/callback` as an authorised
- * redirect URI. Adding an entry here without that config yields a provider error at runtime.
+ * To turn one on: enable it in Supabase with its client id/secret, make sure the provider's own
+ * console lists `https://<project-ref>.supabase.co/auth/v1/callback` as an authorised redirect
+ * URI, then add its id to NEXT_PUBLIC_OAUTH_PROVIDERS (comma-separated) and redeploy.
  */
-export const OAUTH_PROVIDERS = [
-  { id: 'google' as Provider, label: 'Google' },
-  { id: 'facebook' as Provider, label: 'Facebook' },
-  { id: 'apple' as Provider, label: 'Apple' },
+const ALL_PROVIDERS: { id: Provider; label: string }[] = [
+  { id: 'google', label: 'Google' },
+  { id: 'facebook', label: 'Facebook' },
+  { id: 'apple', label: 'Apple' },
 ]
+
+// Comma-separated list of which providers to show, e.g. "google,facebook". Defaults to none, so
+// nothing appears until you've configured a provider and opted it in.
+const enabled = (process.env.NEXT_PUBLIC_OAUTH_PROVIDERS ?? '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
+
+export const OAUTH_PROVIDERS = ALL_PROVIDERS.filter((p) => enabled.includes(p.id))
 
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number]
 

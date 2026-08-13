@@ -41,6 +41,9 @@ export function OAuthButtons({ next = '/home' }: { next?: string }) {
     }
   }
 
+  // Nothing configured yet — render nothing (no stray "or" divider).
+  if (OAUTH_PROVIDERS.length === 0) return null
+
   return (
     <div className="mk-oauth">
       {error && <div className="mk-error">{error}</div>}
