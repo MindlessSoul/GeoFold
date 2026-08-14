@@ -50,6 +50,8 @@ export function demoResponse<T>(path: string, options: RequestInit): T {
   if (pm && method === 'GET') return (projects.find((p) => p.id === pm[1]) ?? projects[0]) as T
   if (pm && method === 'PUT') return undefined as T
   if (clean === '/api/subscriptions/me') return me as T
+  if (clean === '/api/profile' && method === 'GET') return { fullName: 'Demo Surveyor', whatsappNumber: '+6281234567890', domicile: 'Sekadau', gender: 'Laki-laki', occupation: 'Surveyor', completed: true } as T
+  if (clean === '/api/profile' && method === 'PUT') return { ok: true } as T
   if (clean === '/api/surveys/geojson') return geojson as T
   if (clean === '/api/surveys' && method === 'GET') return geojson.features.map((f) => surveyDetail(f.properties.id)) as T
   const sm = clean.match(/^\/api\/surveys\/([^/]+)$/)

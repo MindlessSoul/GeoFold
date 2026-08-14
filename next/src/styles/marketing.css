@@ -199,6 +199,9 @@ textarea.mk-input { min-height: 0; resize: vertical; }
   border: none; cursor: pointer; font-family: inherit;
 }
 .mk-submit:disabled { opacity: 0.6; cursor: default; }
+.mk-consent { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 18px; font-size: 13px; line-height: 1.55; color: var(--mk-muted); }
+.mk-consent input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; width: 17px; height: 17px; accent-color: var(--mk-green); cursor: pointer; }
+.mk-consent a { color: var(--mk-green); text-decoration: underline; }
 /* ---- social sign-in ---- */
 .mk-oauth { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
 .mk-oauth-btn {
