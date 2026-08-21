@@ -12,14 +12,15 @@ import crypto from 'node:crypto'
  */
 export interface MidtransConfig {
   serverKey: string
-  baseUrl: string
+  snapUrl: string
 }
 
 export function midtransConfig(): MidtransConfig | null {
   const serverKey = process.env.MIDTRANS_SERVER_KEY
   if (!serverKey || !serverKey.trim()) return null
   const isProd = (process.env.MIDTRANS_IS_PRODUCTION ?? 'false').toLowerCase() === 'true'
-  return { serverKey, baseUrl: isProd ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com' }
+  // Snap (hosted checkout, all enabled payment methods) lives on the app.* host, not api.*.
+  return { serverKey, snapUrl: isProd ? 'https://app.midtrans.com' : 'https://app.sandbox.midtrans.com' }
 }
 
 const asPositiveInt = (v: string | undefined, fallback: number) => {
@@ -50,16 +51,25 @@ export function verifyMidtransSignature(
   return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
-export interface QrisCharge {
-  qrUrl: string | null
-  transactionId: string | null
-  transactionStatus: string | null
+export interface SnapTransaction {
+  token: string
+  redirectUrl: string
   raw: unknown
 }
 
-// Create a QRIS charge. gross_amount must be a whole rupiah integer (IDR has no minor unit).
-export async function createQrisCharge(cfg: MidtransConfig, orderId: string, amountIdr: number): Promise<QrisCharge> {
-  const res = await fetch(`${cfg.baseUrl}/v2/charge`, {
+/**
+ * Create a Snap transaction — Midtrans's hosted checkout that presents every payment method
+ * enabled in the dashboard (cards, bank transfer/VA, GoPay, ShopeePay, QRIS, …). The client
+ * redirects the user to `redirectUrl`; settlement still arrives on the same webhook.
+ * gross_amount must be a whole rupiah integer (IDR has no minor unit).
+ */
+export async function createSnapTransaction(
+  cfg: MidtransConfig,
+  orderId: string,
+  amountIdr: number,
+  finishUrl?: string,
+): Promise<SnapTransaction> {
+  const res = await fetch(`${cfg.snapUrl}/snap/v1/transactions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -68,31 +78,25 @@ export async function createQrisCharge(cfg: MidtransConfig, orderId: string, amo
       Authorization: 'Basic ' + Buffer.from(cfg.serverKey + ':').toString('base64'),
     },
     body: JSON.stringify({
-      payment_type: 'qris',
       transaction_details: { order_id: orderId, gross_amount: amountIdr },
-      qris: { acquirer: 'gopay' },
+      item_details: [{ id: 'premium', price: amountIdr, quantity: 1, name: `GeoFold Premium ${PREMIUM_DAYS} hari` }],
+      credit_card: { secure: true },
+      ...(finishUrl ? { callbacks: { finish: finishUrl } } : {}),
     }),
   })
 
   const raw: unknown = await res.json().catch(() => null)
   if (!res.ok) {
     const msg =
-      raw && typeof raw === 'object' && 'status_message' in raw
-        ? String((raw as Record<string, unknown>).status_message)
+      raw && typeof raw === 'object' && 'error_messages' in raw
+        ? String((raw as Record<string, unknown>).error_messages)
         : `HTTP ${res.status}`
-    throw new Error(`midtrans_charge_failed: ${msg}`)
+    throw new Error(`midtrans_snap_failed: ${msg}`)
   }
 
   const o = (raw ?? {}) as Record<string, unknown>
-  const actions = Array.isArray(o.actions) ? (o.actions as Array<Record<string, unknown>>) : []
-  const qr = actions.find((a) => a.name === 'generate-qr-code')
-  const str = (v: unknown) => (typeof v === 'string' ? v : null)
-  return {
-    qrUrl: (qr && str(qr.url)) || str(o.qr_string),
-    transactionId: str(o.transaction_id),
-    transactionStatus: str(o.transaction_status),
-    raw,
-  }
+  const str = (v: unknown) => (typeof v === 'string' ? v : '')
+  return { token: str(o.token), redirectUrl: str(o.redirect_url), raw }
 }
 
 /** Map a Midtrans transaction_status/fraud_status onto our payments.Status enum. */

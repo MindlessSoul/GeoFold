@@ -82,9 +82,8 @@ export default function SubscriptionPage() {
 
 function GoPremium({ onGranted }: { onGranted: () => Promise<unknown> }) {
   const [key, setKey] = useState('')
-  const [busy, setBusy] = useState<null | 'redeem' | 'qris'>(null)
+  const [busy, setBusy] = useState<null | 'redeem' | 'pay'>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [qr, setQr] = useState<{ orderId: string; qrUrl: string | null; amountIdr: number } | null>(null)
 
   // The redeem/pay endpoints are live-only; the demo client has no handlers for them.
   if (DEMO_MODE) {
@@ -115,15 +114,15 @@ function GoPremium({ onGranted }: { onGranted: () => Promise<unknown> }) {
     }
   }
 
-  const payQris = async () => {
+  const startCheckout = async () => {
     setMsg(null)
-    setBusy('qris')
+    setBusy('pay')
     try {
-      const r = await api<{ orderId: string; qrUrl: string | null; amountIdr: number }>('/api/payments/qris', { method: 'POST' })
-      setQr(r)
+      const r = await api<{ redirectUrl: string }>('/api/payments/checkout', { method: 'POST' })
+      // Redirect to Midtrans Snap — the hosted page listing every payment method you've enabled.
+      window.location.href = r.redirectUrl
     } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Could not start the payment.' })
-    } finally {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Gagal memulai pembayaran.' })
       setBusy(null)
     }
   }
@@ -146,26 +145,12 @@ function GoPremium({ onGranted }: { onGranted: () => Promise<unknown> }) {
 
       <div className="hint" style={{ margin: '14px 0 10px', textAlign: 'center' }}>or</div>
 
-      {qr ? (
-        <div style={{ textAlign: 'center' }}>
-          {qr.qrUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr.qrUrl} alt="QRIS payment code" style={{ maxWidth: 220, width: '100%', height: 'auto' }} />
-          ) : (
-            <p className="hint">QR ready — open your Midtrans/QRIS app to continue.</p>
-          )}
-          <p className="hint" style={{ marginTop: 8 }}>
-            Scan to pay Rp {qr.amountIdr.toLocaleString('id-ID')}. Order {qr.orderId}.
-          </p>
-          <button type="button" onClick={() => void onGranted()} disabled={busy !== null}>
-            I&apos;ve paid — refresh status
-          </button>
-        </div>
-      ) : (
-        <button type="button" onClick={payQris} disabled={busy !== null} style={{ width: '100%' }}>
-          {busy === 'qris' ? 'Starting…' : 'Pay with QRIS'}
-        </button>
-      )}
+      <button type="button" onClick={startCheckout} disabled={busy !== null} style={{ width: '100%' }}>
+        {busy === 'pay' ? 'Membuka pembayaran…' : 'Upgrade ke Premium'}
+      </button>
+      <p className="hint" style={{ marginTop: 8, marginBottom: 0, textAlign: 'center' }}>
+        Bisa kartu, transfer bank / VA, GoPay, ShopeePay, QRIS, dan lainnya.
+      </p>
 
       {msg && (
         <p className={msg.ok ? undefined : 'error'} style={{ marginTop: 10, marginBottom: 0, color: msg.ok ? 'var(--spruce-ink)' : undefined }}>
